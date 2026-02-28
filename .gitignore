@@ -16,6 +16,10 @@ venv.bak/
 #Ignore generated outputs
 outputs/
 *.lock
+
+# Keep Nix workspace bootstrap files versioned
+!.envrc
+!flake.lock
 dist/
 gpt_researcher.egg-info/
 

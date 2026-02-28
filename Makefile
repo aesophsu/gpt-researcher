@@ -4,7 +4,7 @@ MAIN_BRANCH ?= main
 UPSTREAM_NAME ?= upstream
 UPSTREAM_URL ?= https://github.com/assafelovic/gpt-researcher.git
 
-.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify
+.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify nix-shell bootstrap backend-dev frontend-dev dev
 
 help:
 	@echo "Available targets:"
@@ -14,6 +14,11 @@ help:
 	@echo "  make deps            # Sync Python deps via uv"
 	@echo "  make deps-upgrade    # Upgrade lock + sync via uv"
 	@echo "  make nix-update      # Update Nix env if flake.nix/shell.nix exists"
+	@echo "  make nix-shell       # Enter nix develop shell"
+	@echo "  make bootstrap       # Install backend/frontend dependencies"
+	@echo "  make backend-dev     # Run FastAPI backend on 127.0.0.1:8000"
+	@echo "  make frontend-dev    # Run NextJS frontend on 127.0.0.1:3000"
+	@echo "  make dev             # Print two-terminal dev workflow"
 	@echo "  make safety-branch   # Create chore/sync-YYYYMMDD branch"
 	@echo "  make verify          # Verify remotes and recent commits"
 	@echo "  make update-all      # sync + nix-update + deps"
@@ -68,8 +73,29 @@ nix-update:
 		echo "No flake.nix or shell.nix found; skip nix-update"; \
 	fi
 
+nix-shell:
+	@nix develop
+
+bootstrap:
+	@command -v uv >/dev/null 2>&1 || (echo "uv not found. Enter nix shell first: make nix-shell" && exit 1)
+	@command -v npm >/dev/null 2>&1 || (echo "npm not found. Enter nix shell first: make nix-shell" && exit 1)
+	@echo "Syncing Python deps..."
+	@$(MAKE) deps
+	@echo "Installing frontend deps..."
+	@cd frontend/nextjs && npm install
+
 safety-branch:
 	@git checkout -b "chore/sync-$$(date +%Y%m%d)"
+
+backend-dev:
+	@uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
+frontend-dev:
+	@cd frontend/nextjs && NEXT_PUBLIC_GPTR_API_URL="$${NEXT_PUBLIC_GPTR_API_URL:-http://127.0.0.1:8000}" npm run dev -- --hostname 127.0.0.1 --port 3000
+
+dev:
+	@echo "Run in terminal A: make backend-dev"
+	@echo "Run in terminal B: make frontend-dev"
 
 verify:
 	@git remote -v
