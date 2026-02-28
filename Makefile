@@ -1,0 +1,79 @@
+SHELL := /bin/bash
+
+MAIN_BRANCH ?= main
+UPSTREAM_NAME ?= upstream
+UPSTREAM_URL ?= https://github.com/assafelovic/gpt-researcher.git
+
+.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify
+
+help:
+	@echo "Available targets:"
+	@echo "  make upstream-init   # Add/verify upstream remote"
+	@echo "  make sync            # Fetch upstream, merge to main, push origin"
+	@echo "  make sync-rebase     # Fetch upstream, rebase main, force-with-lease push"
+	@echo "  make deps            # Sync Python deps via uv"
+	@echo "  make deps-upgrade    # Upgrade lock + sync via uv"
+	@echo "  make nix-update      # Update Nix env if flake.nix/shell.nix exists"
+	@echo "  make safety-branch   # Create chore/sync-YYYYMMDD branch"
+	@echo "  make verify          # Verify remotes and recent commits"
+	@echo "  make update-all      # sync + nix-update + deps"
+
+upstream-init:
+	@if git remote get-url "$(UPSTREAM_NAME)" >/dev/null 2>&1; then \
+		echo "$(UPSTREAM_NAME) already exists:"; \
+		git remote get-url "$(UPSTREAM_NAME)"; \
+	else \
+		echo "Adding $(UPSTREAM_NAME) => $(UPSTREAM_URL)"; \
+		git remote add "$(UPSTREAM_NAME)" "$(UPSTREAM_URL)"; \
+	fi
+	@git remote -v
+
+sync:
+	@git fetch "$(UPSTREAM_NAME)" --prune
+	@git checkout "$(MAIN_BRANCH)"
+	@git merge "$(UPSTREAM_NAME)/$(MAIN_BRANCH)"
+	@git push origin "$(MAIN_BRANCH)"
+
+sync-rebase:
+	@git fetch "$(UPSTREAM_NAME)" --prune
+	@git checkout "$(MAIN_BRANCH)"
+	@git rebase "$(UPSTREAM_NAME)/$(MAIN_BRANCH)"
+	@git push --force-with-lease origin "$(MAIN_BRANCH)"
+
+deps:
+	@if uv sync; then \
+		echo "uv sync succeeded"; \
+	else \
+		echo "uv sync failed; fallback to requirements.txt via uv pip"; \
+		uv pip install -r requirements.txt; \
+	fi
+
+deps-upgrade:
+	@if uv lock --upgrade && uv sync; then \
+		echo "uv lock+sync succeeded"; \
+	else \
+		echo "uv lock/sync failed; fallback to upgrading requirements.txt via uv pip"; \
+		uv pip install -U -r requirements.txt; \
+	fi
+
+nix-update:
+	@if [ -f flake.nix ]; then \
+		echo "Detected flake.nix; running flake update + nix develop"; \
+		nix flake update; \
+		nix develop --command echo "nix env ready"; \
+	elif [ -f shell.nix ]; then \
+		echo "Detected shell.nix; running nix-shell"; \
+		nix-shell --run "echo nix env ready"; \
+	else \
+		echo "No flake.nix or shell.nix found; skip nix-update"; \
+	fi
+
+safety-branch:
+	@git checkout -b "chore/sync-$$(date +%Y%m%d)"
+
+verify:
+	@git remote -v
+	@git log --oneline --decorate -n 5
+	@git status --short --branch
+
+update-all: sync nix-update deps
