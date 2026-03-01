@@ -186,3 +186,21 @@ RAG 主要在以下接口收敛：
 - 多智能体入口：`multi_agents/main.py`
 - Nix 环境：`flake.nix`
 
+## 8) Core 通用层（新增）
+
+本仓库新增统一核心能力目录：`gpt_researcher/core/`
+
+- `documents/`：统一文档加载、PDF section 解析、分块、元数据提取
+- `rag/`：统一检索 pipeline（ingest/search）
+- `export/`：统一 Markdown/PDF/DOCX 导出
+- `storage/ports/`：Report/Job/Index/Vector 抽象接口
+- `storage/adapters/`：JSON/Qdrant 适配实现
+
+应用编排层新增：
+
+- `backend/server/application/research_orchestrator.py`
+- `backend/server/application/ingest_orchestrator.py`
+
+医疗能力改为领域插件组织：
+
+- `backend/server/domains/medical/`

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from server.medical_models import (
+from .models import CoreResultEnvelope
+from .medical_models import (
     CitationAuditRequest,
     CitationAuditResponse,
     MedicalJobCreateResponse,
@@ -16,7 +17,7 @@ from server.medical_models import (
     ZoteroIngestRequest,
     ZoteroIngestResponse,
 )
-from server.medical_service import (
+from .medical_service import (
     citation_audit,
     get_medical_job_status,
     ingest_documents,
@@ -30,44 +31,44 @@ from server.medical_service import (
 router = APIRouter(prefix="/api/v1/medical", tags=["medical"])
 
 
-@router.post("/ingest", response_model=MedicalIngestResponse)
-async def medical_ingest(payload: MedicalIngestRequest) -> MedicalIngestResponse:
-    return await ingest_documents(payload)
+@router.post("/ingest")
+async def medical_ingest(payload: MedicalIngestRequest) -> CoreResultEnvelope[MedicalIngestResponse]:
+    return CoreResultEnvelope(data=await ingest_documents(payload))
 
 
-@router.post("/zotero-ingest", response_model=ZoteroIngestResponse)
-async def medical_zotero_ingest(payload: ZoteroIngestRequest) -> ZoteroIngestResponse:
-    return await ingest_zotero_documents(payload)
+@router.post("/zotero-ingest")
+async def medical_zotero_ingest(payload: ZoteroIngestRequest) -> CoreResultEnvelope[ZoteroIngestResponse]:
+    return CoreResultEnvelope(data=await ingest_zotero_documents(payload))
 
 
-@router.post("/ingest/async", response_model=MedicalJobCreateResponse)
-async def medical_ingest_async(payload: MedicalIngestRequest) -> MedicalJobCreateResponse:
-    return await start_medical_ingest_job(payload)
+@router.post("/ingest/async")
+async def medical_ingest_async(payload: MedicalIngestRequest) -> CoreResultEnvelope[MedicalJobCreateResponse]:
+    return CoreResultEnvelope(data=await start_medical_ingest_job(payload))
 
 
-@router.post("/zotero-ingest/async", response_model=MedicalJobCreateResponse)
-async def medical_zotero_ingest_async(payload: ZoteroIngestRequest) -> MedicalJobCreateResponse:
-    return await start_zotero_ingest_job(payload)
+@router.post("/zotero-ingest/async")
+async def medical_zotero_ingest_async(payload: ZoteroIngestRequest) -> CoreResultEnvelope[MedicalJobCreateResponse]:
+    return CoreResultEnvelope(data=await start_zotero_ingest_job(payload))
 
 
-@router.get("/jobs/{job_id}", response_model=MedicalJobStatusResponse)
-async def medical_job_status(job_id: str) -> MedicalJobStatusResponse:
+@router.get("/jobs/{job_id}")
+async def medical_job_status(job_id: str) -> CoreResultEnvelope[MedicalJobStatusResponse]:
     job = await get_medical_job_status(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Medical job not found: {job_id}")
-    return job
+    return CoreResultEnvelope(data=job)
 
 
-@router.post("/search", response_model=MedicalSearchResponse)
-async def medical_search_endpoint(payload: MedicalSearchRequest) -> MedicalSearchResponse:
-    return await medical_search(payload)
+@router.post("/search")
+async def medical_search_endpoint(payload: MedicalSearchRequest) -> CoreResultEnvelope[MedicalSearchResponse]:
+    return CoreResultEnvelope(data=await medical_search(payload))
 
 
-@router.post("/polish", response_model=MedicalPolishResponse)
-async def medical_polish(payload: MedicalPolishRequest) -> MedicalPolishResponse:
-    return await polish_text(payload)
+@router.post("/polish")
+async def medical_polish(payload: MedicalPolishRequest) -> CoreResultEnvelope[MedicalPolishResponse]:
+    return CoreResultEnvelope(data=await polish_text(payload))
 
 
-@router.post("/citation-audit", response_model=CitationAuditResponse)
-async def medical_citation_audit(payload: CitationAuditRequest) -> CitationAuditResponse:
-    return await citation_audit(payload)
+@router.post("/citation-audit")
+async def medical_citation_audit(payload: CitationAuditRequest) -> CoreResultEnvelope[CitationAuditResponse]:
+    return CoreResultEnvelope(data=await citation_audit(payload))

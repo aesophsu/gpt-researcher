@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Generic, List, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResearchRequest(BaseModel):
@@ -21,3 +21,21 @@ class ChatRequest(BaseModel):
 
     report: str
     messages: List[Dict[str, Any]]
+
+
+class ReportRecord(BaseModel):
+    id: str
+    question: str | None = None
+    answer: str | None = None
+    orderedData: list[Any] = Field(default_factory=list)
+    chatMessages: list[Dict[str, Any]] = Field(default_factory=list)
+    timestamp: int
+
+
+T = TypeVar("T")
+
+
+class CoreResultEnvelope(BaseModel, Generic[T]):
+    ok: bool = True
+    data: T | None = None
+    error: str | None = None

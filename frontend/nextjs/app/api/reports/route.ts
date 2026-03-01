@@ -44,7 +44,8 @@ export async function GET(request: Request) {
       );
     }
     
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     
     // Ensure data has the expected structure
     if (!data.reports) {
@@ -99,7 +100,8 @@ export async function POST(request: Request) {
       );
     }
     
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     console.log(`POST /api/reports - Successfully created/updated report with ID: ${data.id || body.id || 'unknown'}`);
     return NextResponse.json(data, { status: 200 });
   } catch (error) {

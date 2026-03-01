@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict
 
+from ..models import ReportRecord
 from ..repositories.report_repository import ReportRepository
 
 
@@ -12,10 +13,14 @@ class ReportService:
 
     async def list_reports(self, report_ids: str | None) -> list[Dict[str, Any]]:
         report_ids_list = report_ids.split(",") if report_ids else None
-        return await self._repository.list(report_ids_list)
+        reports = await self._repository.list(report_ids_list)
+        return [self._normalize_report(r) for r in reports]
 
     async def get_report_or_none(self, research_id: str) -> Dict[str, Any] | None:
-        return await self._repository.get(research_id)
+        report = await self._repository.get(research_id)
+        if report is None:
+            return None
+        return self._normalize_report(report)
 
     async def create_or_update_report(self, data: Dict[str, Any]) -> str:
         research_id = data.get("id", "temp_id")
@@ -81,3 +86,14 @@ class ReportService:
         }
         await self._repository.upsert(research_id, updated)
         return True
+
+    def _normalize_report(self, report: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {
+            "id": report.get("id", "temp_id"),
+            "question": report.get("question"),
+            "answer": report.get("answer"),
+            "orderedData": report.get("orderedData") or [],
+            "chatMessages": report.get("chatMessages") or [],
+            "timestamp": report.get("timestamp") if isinstance(report.get("timestamp"), int) else int(time.time() * 1000),
+        }
+        return ReportRecord(**payload).model_dump()

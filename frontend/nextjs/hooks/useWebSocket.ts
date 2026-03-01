@@ -94,16 +94,26 @@ export const useWebSocket = (
         try {
           console.log(`Starting new research for: ${promptValue}`);
           const dataToSend = { 
+            version: 2,
             task: promptValue,
             report_type, 
-            report_source, 
             tone,
-            query_domains: domains,
-            mcp_enabled: mcp_enabled || false,
-            mcp_strategy: mcp_strategy || "fast",
-            mcp_configs: mcp_configs || [],
-            medical_mode: medical_mode || false,
-            medical_collection: medical_collection || undefined,
+            retrieval: {
+              report_source,
+              query_domains: domains,
+              source_urls: [],
+              mcp_enabled: mcp_enabled || false,
+              mcp_strategy: mcp_strategy || "fast",
+              mcp_configs: mcp_configs || [],
+              medical_mode: medical_mode || false,
+              medical_collection: medical_collection || undefined,
+            },
+            ingest: {
+              document_urls: [],
+            },
+            export: {
+              formats: ["md", "pdf", "docx"],
+            },
           };
           
           // Make sure we have a properly formatted command with a space after start

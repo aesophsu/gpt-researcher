@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from ..storage.base import ReportStorage
+from gpt_researcher.core.storage.ports import ReportStorePort
 
 
 class ReportRepository:
-    def __init__(self, storage: ReportStorage):
+    def __init__(self, storage: ReportStorePort):
         self._storage = storage
 
     async def list(self, report_ids: List[str] | None = None) -> List[Dict[str, Any]]:

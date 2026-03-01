@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - dependency may be optional at runtime be
 
 from gpt_researcher.config.config import Config
 from gpt_researcher.memory import Memory
-from server.medical_models import MedicalSearchResult
+from .medical_models import MedicalSearchResult
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import logging
 import os
 import re
@@ -13,22 +12,23 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Sequence
 from uuid import uuid4
 
+from gpt_researcher.core.documents import (
+    DefaultMetadataExtractor,
+    RawDocument,
+    list_files as core_list_files,
+    loader_for_file as core_loader_for_file,
+)
+from gpt_researcher.core.rag import DefaultRetrievalPipeline
+from gpt_researcher.core.storage.adapters import (
+    JsonIndexStoreAdapter,
+    QdrantVectorStoreAdapter,
+)
 from gpt_researcher.config.config import Config
 from gpt_researcher.retrievers.pubmed_central.pubmed_central import PubMedCentralSearch
 from gpt_researcher.retrievers.semantic_scholar.semantic_scholar import SemanticScholarSearch
 from gpt_researcher.utils.llm import create_chat_completion
-from langchain_community.document_loaders import (
-    BSHTMLLoader,
-    PyMuPDFLoader,
-    TextLoader,
-    UnstructuredCSVLoader,
-    UnstructuredExcelLoader,
-    UnstructuredMarkdownLoader,
-    UnstructuredPowerPointLoader,
-    UnstructuredWordDocumentLoader,
-)
 
-from server.medical_models import (
+from .medical_models import (
     CitationAuditRequest,
     CitationAuditResponse,
     CitationIssue,
@@ -49,22 +49,8 @@ from server.medical_models import (
     ZoteroIngestResponse,
     ZoteroMatchStats,
 )
-from server.medical_job_store import MedicalJobStore
-from server.medical_vector_store import MedicalVectorStore
-
-_SUPPORTED_EXTENSIONS = {
-    ".pdf",
-    ".txt",
-    ".doc",
-    ".docx",
-    ".pptx",
-    ".csv",
-    ".xls",
-    ".xlsx",
-    ".md",
-    ".html",
-    ".htm",
-}
+from .medical_job_store import MedicalJobStore
+from .medical_vector_store import MedicalVectorStore
 
 _MESH_EXPANSION = {
     "heart attack": ["myocardial infarction", "acute coronary syndrome"],
@@ -91,8 +77,10 @@ _CLAIM_MARKERS = (
 logger = logging.getLogger(__name__)
 _VECTOR_STORE: MedicalVectorStore | None = None
 _JOB_STORE: MedicalJobStore | None = None
+_RETRIEVAL_PIPELINE: DefaultRetrievalPipeline | None = None
 _RUNNING_JOBS: dict[str, asyncio.Task[Any]] = {}
 ProgressCallback = Callable[..., Awaitable[None] | None]
+_METADATA_EXTRACTOR = DefaultMetadataExtractor()
 
 
 @dataclass
@@ -123,43 +111,9 @@ class IndexedChunk:
         }
 
 
-class MedicalIndexStore:
+class MedicalIndexStore(JsonIndexStoreAdapter):
     def __init__(self, path: Path):
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._state = self._load()
-
-    def _load(self) -> dict:
-        if not self.path.exists():
-            return {"collections": {}}
-        try:
-            with self.path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict) and "collections" in data:
-                return data
-        except Exception:
-            pass
-        return {"collections": {}}
-
-    def _save(self) -> None:
-        with self.path.open("w", encoding="utf-8") as f:
-            json.dump(self._state, f, ensure_ascii=True, indent=2)
-
-    def upsert_collection(self, collection_name: str, docs: list[dict[str, Any]], chunks: list[Any]) -> None:
-        serialized_chunks: list[dict[str, Any]] = []
-        for chunk in chunks:
-            if isinstance(chunk, IndexedChunk):
-                serialized_chunks.append(chunk.to_dict())
-            elif isinstance(chunk, dict):
-                serialized_chunks.append(chunk)
-        self._state["collections"][collection_name] = {
-            "docs": docs,
-            "chunks": serialized_chunks,
-        }
-        self._save()
-
-    def get_collection(self, collection_name: str) -> dict:
-        return self._state["collections"].get(collection_name, {"docs": [], "chunks": []})
+        super().__init__(path)
 
 
 def _get_store() -> MedicalIndexStore:
@@ -178,8 +132,18 @@ def _get_job_store() -> MedicalJobStore:
 def _get_vector_store() -> MedicalVectorStore:
     global _VECTOR_STORE
     if _VECTOR_STORE is None:
-        _VECTOR_STORE = MedicalVectorStore()
+        _VECTOR_STORE = QdrantVectorStoreAdapter()
     return _VECTOR_STORE
+
+
+def _get_retrieval_pipeline() -> DefaultRetrievalPipeline:
+    global _RETRIEVAL_PIPELINE
+    if _RETRIEVAL_PIPELINE is None:
+        _RETRIEVAL_PIPELINE = DefaultRetrievalPipeline(
+            index_store=_get_store(),
+            vector_store=_get_vector_store(),
+        )
+    return _RETRIEVAL_PIPELINE
 
 
 def _try_upsert_qdrant(collection_name: str, chunks: list[IndexedChunk]) -> tuple[str, list[str], FailedFile | None]:
@@ -242,58 +206,16 @@ def _similarity(query: str, text: str) -> float:
 
 
 def _extract_metadata(text: str) -> Dict[str, int | str | None]:
-    title = None
-    year = None
-    doi = None
-
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if lines:
-        title = lines[0][:240]
-
-    year_match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
-    if year_match:
-        year = int(year_match.group(1))
-
-    doi_match = re.search(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b", text)
-    if doi_match:
-        doi = doi_match.group(0)
-
-    return {"title": title, "year": year, "doi": doi, "journal": None}
+    meta = _METADATA_EXTRACTOR.extract(RawDocument(source="inline://metadata", raw_content=text))
+    return {"title": meta.title, "year": meta.year, "doi": meta.doi, "journal": meta.journal}
 
 
 def _list_files(path: Path, recursive: bool) -> List[Path]:
-    if path.is_file():
-        return [path]
-    if not path.exists():
-        return []
-
-    pattern = "**/*" if recursive else "*"
-    files = []
-    for candidate in path.glob(pattern):
-        if candidate.is_file() and candidate.suffix.lower() in _SUPPORTED_EXTENSIONS:
-            files.append(candidate)
-    return files
+    return core_list_files(path, recursive)
 
 
 def _loader_for_file(file_path: Path):
-    extension = file_path.suffix.lower()
-    if extension == ".pdf":
-        return PyMuPDFLoader(str(file_path))
-    if extension == ".txt":
-        return TextLoader(str(file_path))
-    if extension in {".doc", ".docx"}:
-        return UnstructuredWordDocumentLoader(str(file_path))
-    if extension == ".pptx":
-        return UnstructuredPowerPointLoader(str(file_path))
-    if extension == ".csv":
-        return UnstructuredCSVLoader(str(file_path), mode="elements")
-    if extension in {".xls", ".xlsx"}:
-        return UnstructuredExcelLoader(str(file_path), mode="elements")
-    if extension == ".md":
-        return UnstructuredMarkdownLoader(str(file_path))
-    if extension in {".html", ".htm"}:
-        return BSHTMLLoader(str(file_path))
-    return None
+    return core_loader_for_file(file_path)
 
 
 async def _emit_progress(callback: ProgressCallback | None, **payload: Any) -> None:
@@ -922,34 +844,24 @@ def _score_local_chunk(query: str, chunk: dict) -> float:
     return max(0.0, min(1.0, score))
 
 
-def _local_search(query: str, collection_name: str, top_k: int) -> List[MedicalSearchResult]:
-    store = _get_store()
-    collection = store.get_collection(collection_name)
-    chunks = collection.get("chunks", [])
-
-    scored = []
-    for chunk in chunks:
-        score = _score_local_chunk(query, chunk)
-        if score <= 0:
-            continue
-        scored.append((score, chunk))
-
-    scored.sort(key=lambda item: item[0], reverse=True)
-
+async def _local_search(query: str, collection_name: str, top_k: int) -> List[MedicalSearchResult]:
+    pipeline = _get_retrieval_pipeline()
+    hits = await pipeline.search(query=query, namespace=collection_name, top_k=top_k)
     results: list[MedicalSearchResult] = []
-    for score, chunk in scored[:top_k]:
-        snippet = chunk.get("text", "")[:500]
+    for hit in hits:
+        snippet = hit.snippet[:500]
+        meta = hit.metadata or {}
         results.append(
             MedicalSearchResult(
                 source_type="local",
-                source=chunk.get("source", "local"),
-                title=chunk.get("title"),
+                source=hit.source or "local",
+                title=meta.get("title"),
                 snippet=snippet,
-                score=round(score, 4),
-                page=chunk.get("page"),
-                doi=chunk.get("doi"),
-                year=chunk.get("year"),
-                journal=chunk.get("journal"),
+                score=round(hit.score, 4),
+                page=meta.get("page"),
+                doi=meta.get("doi"),
+                year=meta.get("year"),
+                journal=meta.get("journal"),
             )
         )
     return results
@@ -1046,7 +958,7 @@ async def medical_search(request: MedicalSearchRequest) -> MedicalSearchResponse
                 )
 
         if not local_results:
-            local_results = _local_search(expanded_query, request.collection_name, request.top_k)
+            local_results = await _local_search(expanded_query, request.collection_name, request.top_k)
             logger.info(
                 "medical.search local backend=json_fallback collection=%s results=%s",
                 request.collection_name,

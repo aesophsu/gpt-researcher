@@ -10,7 +10,7 @@ import uuid
 from fastapi.responses import JSONResponse, FileResponse
 from gpt_researcher.document.document import DocumentLoader
 from gpt_researcher import GPTResearcher
-from utils import write_md_to_pdf, write_md_to_word, write_text_to_md
+from ..utils import write_md_to_pdf, write_md_to_word, write_text_to_md
 from pathlib import Path
 from datetime import datetime
 from fastapi import HTTPException
@@ -496,6 +496,26 @@ async def handle_websocket_communication(websocket, manager):
         await clarification_gate_manager.cleanup_session(str(id(websocket)))
 
 def extract_command_data(json_data: Dict) -> tuple:
+    version = int(json_data.get("version", 1))
+    if version >= 2:
+        retrieval = json_data.get("retrieval") or {}
+        ingest = json_data.get("ingest") or {}
+        return (
+            json_data.get("task"),
+            json_data.get("report_type"),
+            retrieval.get("source_urls", []),
+            ingest.get("document_urls", []),
+            json_data.get("tone"),
+            json_data.get("headers", {}),
+            retrieval.get("report_source"),
+            retrieval.get("query_domains", []),
+            retrieval.get("mcp_enabled", False),
+            retrieval.get("mcp_strategy", "fast"),
+            retrieval.get("mcp_configs", []),
+            retrieval.get("medical_mode", False),
+            retrieval.get("medical_collection"),
+        )
+
     return (
         json_data.get("task"),
         json_data.get("report_type"),

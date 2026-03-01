@@ -18,7 +18,8 @@ export async function GET(
     console.log(`GET /api/reports/${id}/chat - Proxying request to backend`);
     
     const response = await fetch(`${backendUrl}/api/reports/${id}/chat`);
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     
     return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
@@ -67,7 +68,8 @@ export async function POST(
       body: JSON.stringify(body),
     });
     
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
     console.error(`POST /api/reports/${id}/chat - Error proxying to backend:`, error);

@@ -21,7 +21,8 @@ export async function GET(
       );
     }
     
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     console.error(`GET /api/reports/${id} - Error proxying to backend:`, error);
@@ -104,7 +105,8 @@ export async function PUT(
       );
     }
     
-    const data = await response.json();
+    const payload = await response.json();
+    const data = payload?.data ?? payload;
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     console.error(`PUT /api/reports/${id} - Error proxying to backend:`, error);
