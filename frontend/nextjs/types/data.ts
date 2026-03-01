@@ -48,6 +48,8 @@ export interface ChatBoxSettings {
   mcp_enabled: boolean;
   mcp_configs: MCPConfig[];
   mcp_strategy?: string;
+  medical_mode: boolean;
+  medical_collection?: string;
 }
 
 export interface Domain {

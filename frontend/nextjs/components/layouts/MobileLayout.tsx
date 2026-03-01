@@ -251,6 +251,20 @@ export default function MobileLayout({
                   <option value="scholar">Scholar</option>
                 </select>
               </div>
+
+              <div className="flex items-center justify-between bg-gray-900 border border-gray-700 rounded-md py-2 px-3">
+                <label className="text-xs text-gray-300">Medical Mode (Qdrant local-first)</label>
+                <input
+                  type="checkbox"
+                  checked={chatBoxSettings.medical_mode || false}
+                  onChange={(e) =>
+                    setChatBoxSettings({
+                      ...chatBoxSettings,
+                      medical_mode: e.target.checked,
+                    })
+                  }
+                />
+              </div>
               
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Research Tone</label>

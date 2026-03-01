@@ -47,6 +47,7 @@ export const GPTResearcher = ({
     mcp_enabled: false,
     mcp_configs: [],
     mcp_strategy: 'fast',
+    medical_mode: true,
   });
   const [question, setQuestion] = useState("");
   const [orderedData, setOrderedData] = useState<Data[]>([]);
@@ -223,7 +224,14 @@ export const GPTResearcher = ({
 
   useEffect(() => {
     const groupedData = preprocessOrderedData(orderedData);
-    const statusReports = ["agent_generated", "starting_research", "planning_research", "error"];
+    const statusReports = [
+      "agent_generated",
+      "starting_research",
+      "planning_research",
+      "medical_retrieval_stage_local",
+      "medical_retrieval_stats",
+      "error",
+    ];
     
     const newLogs = groupedData.reduce((acc: any[], data) => {
       if (data.type === 'accordionBlock') {

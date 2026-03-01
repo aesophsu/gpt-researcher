@@ -24,6 +24,9 @@ class DetailedReport:
         complement_source_urls: bool = False,
         mcp_configs=None,
         mcp_strategy=None,
+        medical_mode: bool = False,
+        medical_collection: str | None = None,
+        medical_seed_documents=None,
     ):
         self.query = query
         self.report_type = report_type
@@ -54,6 +57,9 @@ class DetailedReport:
             "websocket": self.websocket,
             "headers": self.headers,
             "complement_source_urls": self.complement_source_urls,
+            "medical_mode": medical_mode,
+            "medical_collection": medical_collection,
+            "medical_seed_documents": medical_seed_documents or [],
         }
 
         # Add MCP parameters if provided
@@ -132,7 +138,10 @@ class DetailedReport:
             source_urls=self.source_urls,
             # Propagate MCP configuration so follow-up researchers can use MCP
             mcp_configs=self.gpt_researcher.mcp_configs,
-            mcp_strategy=self.gpt_researcher.mcp_strategy
+            mcp_strategy=self.gpt_researcher.mcp_strategy,
+            medical_mode=self.gpt_researcher.medical_mode,
+            medical_collection=self.gpt_researcher.medical_collection,
+            medical_seed_documents=self.gpt_researcher.medical_seed_documents,
         )
 
         subtopic_assistant.context = list(set(self.global_context))

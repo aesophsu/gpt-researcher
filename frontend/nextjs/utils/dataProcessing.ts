@@ -1,5 +1,6 @@
 import { Data } from '../types/data';
 import { consolidateSourceAndImageBlocks } from './consolidateBlocks';
+import { normalizeLegacyLinkLabels } from './normalizeLinks';
 
 export const preprocessOrderedData = (data: Data[]) => {
   let groupedData: any[] = [];
@@ -23,13 +24,13 @@ export const preprocessOrderedData = (data: Data[]) => {
         currentReportGroup = { type: 'reportBlock', content: '' };
         groupedData.push(currentReportGroup);
       }
-      currentReportGroup.content += output;
+      currentReportGroup.content += normalizeLegacyLinkLabels(output || '');
     } else if (type === 'report_complete') {
       // Replace entire report content with the complete version (includes images)
       if (currentReportGroup) {
-        currentReportGroup.content = output;
+        currentReportGroup.content = normalizeLegacyLinkLabels(output || '');
       } else {
-        currentReportGroup = { type: 'reportBlock', content: output };
+        currentReportGroup = { type: 'reportBlock', content: normalizeLegacyLinkLabels(output || '') };
         groupedData.push(currentReportGroup);
       }
     } else if (content === 'selected_images') {
@@ -39,11 +40,11 @@ export const preprocessOrderedData = (data: Data[]) => {
         finalReportGroup = { type: 'reportBlock', content: '' };
         groupedData.push(finalReportGroup);
       }
-      finalReportGroup.content += output.report;
+      finalReportGroup.content += normalizeLegacyLinkLabels(output?.report || '');
     } else if (type === 'langgraphButton') {
       groupedData.push({ type: 'langgraphButton', link });
     } else if (type === 'chat') {
-      groupedData.push({ type: 'chat', content: content });
+      groupedData.push({ type: 'chat', content: normalizeLegacyLinkLabels(content || '') });
     } else {
       if (currentReportGroup) {
         currentReportGroup = null;

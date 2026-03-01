@@ -21,6 +21,9 @@ class BasicReport:
         headers=None,
         mcp_configs=None,
         mcp_strategy=None,
+        medical_mode: bool = False,
+        medical_collection: str | None = None,
+        medical_seed_documents=None,
     ):
         self.query = query
         self.query_domains = query_domains
@@ -48,6 +51,9 @@ class BasicReport:
             "config_path": self.config_path,
             "websocket": self.websocket,
             "headers": self.headers,
+            "medical_mode": medical_mode,
+            "medical_collection": medical_collection,
+            "medical_seed_documents": medical_seed_documents or [],
         }
 
         # Add MCP parameters if provided

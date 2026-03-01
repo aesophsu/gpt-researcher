@@ -45,6 +45,7 @@ export default function ResearchPage({ params }: { params: { id: string } }) {
       mcp_enabled: false,
       mcp_configs: [],
       mcp_strategy: "fast",
+      medical_mode: true,
     };
 
     // Try to load all settings from localStorage
@@ -267,7 +268,14 @@ export default function ResearchPage({ params }: { params: { id: string } }) {
   // Process ordered data into logs for display
   useEffect(() => {
     const groupedData = preprocessOrderedData(orderedData);
-    const statusReports = ["agent_generated", "starting_research", "planning_research", "error"];
+    const statusReports = [
+      "agent_generated",
+      "starting_research",
+      "planning_research",
+      "medical_retrieval_stage_local",
+      "medical_retrieval_stats",
+      "error",
+    ];
     
     const newLogs = groupedData.reduce((acc: any[], data) => {
       // Process accordion blocks (grouped data)

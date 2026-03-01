@@ -147,6 +147,22 @@ export default function ResearchForm({
         </select>
       </div>
 
+      <div className="form-group">
+        <label className="agent_question inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={chatBoxSettings.medical_mode || false}
+            onChange={(e) =>
+              setChatBoxSettings((prev) => ({
+                ...prev,
+                medical_mode: e.target.checked,
+              }))
+            }
+          />
+          Medical Mode (Qdrant local-first)
+        </label>
+      </div>
+
       
 
       {report_source === "local" || report_source === "hybrid" ? (

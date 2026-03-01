@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import traceback
 from typing import Dict, List
 
@@ -11,6 +12,8 @@ from report_type import BasicReport, DetailedReport
 
 from gpt_researcher.utils.enum import ReportType, Tone
 from gpt_researcher.actions import stream_output  # Import stream_output
+from .medical_models import MedicalSearchRequest
+from .medical_service import medical_search
 from .server_utils import CustomLogsHandler
 
 logger = logging.getLogger(__name__)
@@ -95,7 +98,7 @@ class WebSocketManager:
             except:
                 pass  # If this fails too, there's nothing more we can do
 
-    async def start_streaming(self, task, report_type, report_source, source_urls, document_urls, tone, websocket, headers=None, query_domains=None, mcp_enabled=False, mcp_strategy="fast", mcp_configs=None):
+    async def start_streaming(self, task, report_type, report_source, source_urls, document_urls, tone, websocket, headers=None, query_domains=None, mcp_enabled=False, mcp_strategy="fast", mcp_configs=None, medical_mode=False, medical_collection=None):
         """Start streaming the output."""
         query_domains = query_domains or []
         mcp_configs = mcp_configs or []
@@ -107,11 +110,31 @@ class WebSocketManager:
         report = await run_agent(
             task, report_type, report_source, source_urls, document_urls, tone, websocket, 
             headers=headers, query_domains=query_domains, config_path=config_path,
-            mcp_enabled=mcp_enabled, mcp_strategy=mcp_strategy, mcp_configs=mcp_configs
+            mcp_enabled=mcp_enabled, mcp_strategy=mcp_strategy, mcp_configs=mcp_configs,
+            medical_mode=medical_mode, medical_collection=medical_collection
         )
         return report
 
-async def run_agent(task, report_type, report_source, source_urls, document_urls, tone: Tone, websocket, stream_output=stream_output, headers=None, query_domains=None, config_path="", return_researcher=False, mcp_enabled=False, mcp_strategy="fast", mcp_configs=None):
+def _resolve_medical_collection(requested_collection: str | None) -> str:
+    if requested_collection:
+        return requested_collection
+    return (
+        os.getenv("MEDICAL_DEFAULT_COLLECTION")
+        or os.getenv("ZOTERO_QDRANT_COLLECTION")
+        or "default"
+    )
+
+
+def _medical_local_topk() -> int:
+    raw = os.getenv("MEDICAL_LOCAL_TOPK", "8")
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 8
+    return max(3, min(20, value))
+
+
+async def run_agent(task, report_type, report_source, source_urls, document_urls, tone: Tone, websocket, stream_output=stream_output, headers=None, query_domains=None, config_path="", return_researcher=False, mcp_enabled=False, mcp_strategy="fast", mcp_configs=None, medical_mode=False, medical_collection=None):
     """Run the agent."""    
     query_domains = query_domains or []
     mcp_configs = mcp_configs or []
@@ -127,6 +150,66 @@ async def run_agent(task, report_type, report_source, source_urls, document_urls
             "content": "mcp_init",
             "output": f"🔧 MCP enabled with strategy '{mcp_strategy}' and {len(mcp_configs)} server(s)"
         })
+
+    local_hits = 0
+    fallback_to_academic = False
+    resolved_collection = _resolve_medical_collection(medical_collection) if medical_mode else None
+    medical_seed_documents = []
+
+    if medical_mode:
+        await logs_handler.send_json({
+            "type": "logs",
+            "content": "medical_retrieval_stage_local",
+            "output": f"🩺 Medical mode enabled: searching local Qdrant collection '{resolved_collection}' first...",
+            "metadata": {
+                "collection": resolved_collection,
+                "top_k": _medical_local_topk(),
+            },
+        })
+        try:
+            local_response = await medical_search(
+                MedicalSearchRequest(
+                    query=task,
+                    top_k=_medical_local_topk(),
+                    sources="local",
+                    collection_name=resolved_collection,
+                )
+            )
+            local_results = local_response.results or []
+            local_hits = len(local_results)
+            medical_seed_documents = [
+                {
+                    "title": item.title or f"Local evidence #{idx + 1}",
+                    "url": item.url or f"local://{item.source}/{idx + 1}",
+                    "raw_content": item.snippet or "",
+                    "source_type": item.source_type,
+                    "source": item.source,
+                    "score": item.score,
+                    "doi": item.doi,
+                    "year": item.year,
+                    "journal": item.journal,
+                }
+                for idx, item in enumerate(local_results)
+                if (item.snippet or "").strip()
+            ]
+        except Exception as exc:
+            fallback_to_academic = True
+            logger.warning("medical mode local retrieval failed: %s", exc)
+            await logs_handler.send_json({
+                "type": "logs",
+                "content": "medical_retrieval_stage_local",
+                "output": "⚠️ Local Qdrant retrieval failed, falling back to academic retrieval.",
+                "metadata": {
+                    "collection": resolved_collection,
+                    "error": type(exc).__name__,
+                },
+            })
+
+    common_kwargs = {
+        "medical_mode": medical_mode,
+        "medical_collection": resolved_collection,
+        "medical_seed_documents": medical_seed_documents,
+    }
 
     # Initialize researcher based on report type
     if report_type == "multi_agents":
@@ -153,6 +236,7 @@ async def run_agent(task, report_type, report_source, source_urls, document_urls
             headers=headers,
             mcp_configs=mcp_configs if mcp_enabled else None,
             mcp_strategy=mcp_strategy if mcp_enabled else None,
+            **common_kwargs,
         )
         report = await researcher.run()
         
@@ -170,8 +254,28 @@ async def run_agent(task, report_type, report_source, source_urls, document_urls
             headers=headers,
             mcp_configs=mcp_configs if mcp_enabled else None,
             mcp_strategy=mcp_strategy if mcp_enabled else None,
+            **common_kwargs,
         )
         report = await researcher.run()
+
+    if medical_mode and report_type != "multi_agents":
+        academic_hits = len(getattr(researcher.gpt_researcher, "visited_urls", set()))
+        if local_hits == 0:
+            fallback_to_academic = True
+        await logs_handler.send_json({
+            "type": "logs",
+            "content": "medical_retrieval_stats",
+            "output": (
+                f"📊 Medical retrieval stats - Local(Qdrant): {local_hits}, "
+                f"Academic: {academic_hits}, Fallback: {'Yes' if fallback_to_academic else 'No'}"
+            ),
+            "metadata": {
+                "local_hits": local_hits,
+                "academic_hits": academic_hits,
+                "fallback_to_academic": fallback_to_academic,
+                "collection": resolved_collection,
+            },
+        })
 
     if report_type != "multi_agents" and return_researcher:
         return report, researcher.gpt_researcher

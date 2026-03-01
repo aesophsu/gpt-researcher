@@ -8,6 +8,7 @@ import LogsSection from './ResearchBlocks/LogsSection';
 import AccessReport from './ResearchBlocks/AccessReport';
 import { preprocessOrderedData } from '../utils/dataProcessing';
 import { Data } from '../types/data';
+import MedicalSourceStatsBar from './research/MedicalSourceStatsBar';
 
 interface ResearchResultsProps {
   orderedData: Data[];
@@ -66,11 +67,16 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
     .filter(data => data.type === 'reportBlock')
     .pop();
   const subqueriesComponent = groupedData.find(data => data.content === 'subqueries');
+  const medicalStatsLog = allLogs
+    .filter((log) => log.header === "medical_retrieval_stats" && log.metadata)
+    .pop();
+  const medicalStats = medicalStatsLog?.metadata;
 
   return (
     <>
       {initialQuestion && <Question question={initialQuestion.content} />}
       {orderedData.length > 0 && <LogsSection logs={allLogs} />}
+      {medicalStats && <MedicalSourceStatsBar stats={medicalStats} />}
       {subqueriesComponent && (
         <SubQuestions
           metadata={subqueriesComponent.metadata}

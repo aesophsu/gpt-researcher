@@ -185,7 +185,13 @@ class ResearchConductor:
                 research_data += ' '.join(additional_research)
         elif self.researcher.report_source == ReportSource.Web.value:
             self.logger.info("Using web search with all configured retrievers")
-            research_data = await self._get_context_by_web_search(self.researcher.query, [], self.researcher.query_domains)
+            if getattr(self.researcher, "medical_mode", False):
+                research_data = await self._get_context_with_medical_seed(
+                    self.researcher.query,
+                    self.researcher.query_domains,
+                )
+            else:
+                research_data = await self._get_context_by_web_search(self.researcher.query, [], self.researcher.query_domains)
         elif self.researcher.report_source == ReportSource.Local.value:
             self.logger.info("Using local search")
             document_data = await DocumentLoader(self.researcher.cfg.doc_path).load()
@@ -196,14 +202,27 @@ class ResearchConductor:
             research_data = await self._get_context_by_web_search(self.researcher.query, document_data, self.researcher.query_domains)
         # Hybrid search including both local documents and web sources
         elif self.researcher.report_source == ReportSource.Hybrid.value:
-            if self.researcher.document_urls:
-                document_data = await OnlineDocumentLoader(self.researcher.document_urls).load()
+            document_data = []
+            try:
+                if self.researcher.document_urls:
+                    document_data = await OnlineDocumentLoader(self.researcher.document_urls).load()
+                else:
+                    document_data = await DocumentLoader(self.researcher.cfg.doc_path).load()
+            except ValueError:
+                self.logger.warning("Hybrid mode: no local documents found, falling back to web-only context")
+
+            docs_context = []
+            if document_data:
+                if self.researcher.vector_store:
+                    self.researcher.vector_store.load(document_data)
+                docs_context = await self._get_context_by_web_search(self.researcher.query, document_data, self.researcher.query_domains)
+            if getattr(self.researcher, "medical_mode", False):
+                web_context = await self._get_context_with_medical_seed(
+                    self.researcher.query,
+                    self.researcher.query_domains,
+                )
             else:
-                document_data = await DocumentLoader(self.researcher.cfg.doc_path).load()
-            if self.researcher.vector_store:
-                self.researcher.vector_store.load(document_data)
-            docs_context = await self._get_context_by_web_search(self.researcher.query, document_data, self.researcher.query_domains)
-            web_context = await self._get_context_by_web_search(self.researcher.query, [], self.researcher.query_domains)
+                web_context = await self._get_context_by_web_search(self.researcher.query, [], self.researcher.query_domains)
             research_data = self.researcher.prompt_family.join_local_web_documents(docs_context, web_context)
         elif self.researcher.report_source == ReportSource.Azure.value:
             from ..document.azure_document_loader import AzureDocumentLoader
@@ -246,6 +265,25 @@ class ResearchConductor:
 
         self.logger.info(f"Research completed. Context size: {len(str(self.researcher.context))}")
         return self.researcher.context
+
+    async def _get_context_with_medical_seed(self, query: str, query_domains: list | None = None):
+        """Compose context from local medical seed docs and academic/web retrieval."""
+        query_domains = query_domains or []
+        local_seed_context = ""
+        seed_docs = getattr(self.researcher, "medical_seed_documents", []) or []
+
+        if seed_docs:
+            try:
+                local_seed_context = await self.researcher.context_manager.get_similar_content_by_query(query, seed_docs)
+                self.logger.info("Medical mode local seed context size: %s", len(str(local_seed_context)))
+            except Exception as exc:
+                self.logger.warning("Medical mode local seed context failed: %s", exc)
+                local_seed_context = ""
+
+        academic_context = await self._get_context_by_web_search(query, [], query_domains)
+        if local_seed_context:
+            return self.researcher.prompt_family.join_local_web_documents(local_seed_context, academic_context)
+        return academic_context
 
     async def _get_context_by_urls(self, urls):
         """Scrapes and compresses the context from the given urls"""

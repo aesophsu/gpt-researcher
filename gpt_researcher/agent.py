@@ -78,6 +78,9 @@ class GPTResearcher:
         mcp_configs: list[dict] | None = None,
         mcp_max_iterations: int | None = None,
         mcp_strategy: str | None = None,
+        medical_mode: bool = False,
+        medical_collection: str | None = None,
+        medical_seed_documents: list[dict] | None = None,
         **kwargs
     ):
         """
@@ -163,6 +166,9 @@ class GPTResearcher:
         self.research_costs = 0.0
         self.log_handler = log_handler
         self.prompt_family = get_prompt_family(prompt_family or self.cfg.prompt_family, self.cfg)
+        self.medical_mode = bool(medical_mode)
+        self.medical_collection = medical_collection
+        self.medical_seed_documents = medical_seed_documents or []
         
         # Process MCP configurations if provided
         self.mcp_configs = mcp_configs

@@ -2,6 +2,7 @@
 import Accordion from '../../Task/Accordion';
 import { useEffect, useState } from 'react';
 import { markdownToHtml } from '../../../helpers/markdownHelper';
+import { normalizeLegacyLinkLabels } from '../../../utils/normalizeLinks';
 import ImagesAlbum from '../../Images/ImagesAlbum';
 import Image from "next/image";
 
@@ -71,7 +72,7 @@ const LogMessage: React.FC<LogMessageProps> = ({ logs }) => {
               className="w-full max-w-4xl mx-auto rounded-lg pt-2 mt-3 pb-2 px-4 bg-gray-900 shadow-md"
             >
               <p className="py-3 text-base leading-relaxed text-white dark:text-white">
-                {log.text}
+                {normalizeLegacyLinkLabels(log.text || '')}
               </p>
             </div>
           );

@@ -92,7 +92,8 @@ safety-branch:
 	@git checkout -b "chore/sync-$$(date +%Y%m%d)"
 
 backend-dev:
-	@uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
+		uv run uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 frontend-dev:
 	@cd frontend/nextjs && NEXT_PUBLIC_GPTR_API_URL="$${NEXT_PUBLIC_GPTR_API_URL:-http://127.0.0.1:8000}" npm run dev -- --hostname 127.0.0.1 --port 3000

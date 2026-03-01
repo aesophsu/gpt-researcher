@@ -274,10 +274,10 @@ The response should contain ONLY the list.
         if report_source == ReportSource.Web.value:
             reference_prompt = f"""
 You MUST write all used source urls at the end of the report as references, and make sure to not add duplicated sources, but only one reference for each.
-Every url should be hyperlinked: [url website](url)
+Every URL should be hyperlinked with a descriptive label: [source link](url)
 Additionally, you MUST include hyperlinks to the relevant URLs wherever they are referenced in the report:
 
-eg: Author, A. A. (Year, Month Date). Title of web page. Website Name. [url website](url)
+eg: Author, A. A. (Year, Month Date). Title of web page. Website Name. [source link](url)
 """
         else:
             reference_prompt = f"""
@@ -363,7 +363,7 @@ The response MUST not contain any markdown format or additional text (like ```js
         if report_source == ReportSource.Web.value:
             reference_prompt = f"""
             You MUST include all relevant source urls.
-            Every url should be hyperlinked: [url website](url)
+            Every URL should be hyperlinked with a descriptive label: [source link](url)
             """
         else:
             reference_prompt = f"""
@@ -381,7 +381,7 @@ The response MUST not contain any markdown format or additional text (like ```js
             f"The report should have a minimum length of {total_words} words.\n"
             f"You MUST write the report in the following language: {language}.\n"
             "You MUST include all relevant source urls."
-            "Every url should be hyperlinked: [url website](url)"
+            "Every URL should be hyperlinked with a descriptive label: [source link](url)"
             f"{reference_prompt}"
         )
 
@@ -436,10 +436,10 @@ The response MUST not contain any markdown format or additional text (like ```js
         if report_source == ReportSource.Web.value:
             reference_prompt = f"""
 You MUST write all used source urls at the end of the report as references, and make sure to not add duplicated sources, but only one reference for each.
-Every url should be hyperlinked: [url website](url)
+Every URL should be hyperlinked with a descriptive label: [source link](url)
 Additionally, you MUST include hyperlinks to the relevant URLs wherever they are referenced in the report:
 
-eg: Author, A. A. (Year, Month Date). Title of web page. Website Name. [url website](url)
+eg: Author, A. A. (Year, Month Date). Title of web page. Website Name. [source link](url)
 """
         else:
             reference_prompt = f"""
