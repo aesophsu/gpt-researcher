@@ -36,7 +36,7 @@ DEFAULT_CONFIG: BaseConfig = {
     "SCRAPER_RATE_LIMIT_DELAY": 0.0,  # Minimum seconds between scraper requests (0 = no limit, useful for API rate limiting)
     "MAX_SUBTOPICS": 3,
     "LANGUAGE": "english",
-    "REPORT_SOURCE": "web",
+    "REPORT_SOURCE": "hybrid",
     "DOC_PATH": "./my-docs",
     "PROMPT_FAMILY": "default",
     "LLM_KWARGS": {},

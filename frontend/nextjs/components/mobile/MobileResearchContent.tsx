@@ -95,8 +95,8 @@ export default function MobileResearchContent({
     try {
       // Get chat settings from localStorage or use defaults
       const reportSource = window.localStorage.getItem('chatBoxSettings') ? 
-        JSON.parse(window.localStorage.getItem('chatBoxSettings') || '{}').report_source || 'web' :
-        'web';
+        JSON.parse(window.localStorage.getItem('chatBoxSettings') || '{}').report_source || 'hybrid' :
+        'hybrid';
         
       const tone = window.localStorage.getItem('chatBoxSettings') ?
         JSON.parse(window.localStorage.getItem('chatBoxSettings') || '{}').tone || 'Objective' :

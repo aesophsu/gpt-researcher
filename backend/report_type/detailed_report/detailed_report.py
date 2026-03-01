@@ -13,13 +13,13 @@ class DetailedReport:
         query: str,
         report_type: str,
         report_source: str,
-        source_urls: List[str] = [],
-        document_urls: List[str] = [],
-        query_domains: List[str] = [],
+        source_urls: List[str] | None = None,
+        document_urls: List[str] | None = None,
+        query_domains: List[str] | None = None,
         config_path: str = None,
         tone: Any = "",
         websocket: WebSocket = None,
-        subtopics: List[Dict] = [],
+        subtopics: List[Dict] | None = None,
         headers: Optional[Dict] = None,
         complement_source_urls: bool = False,
         mcp_configs=None,
@@ -28,13 +28,13 @@ class DetailedReport:
         self.query = query
         self.report_type = report_type
         self.report_source = report_source
-        self.source_urls = source_urls
-        self.document_urls = document_urls
-        self.query_domains = query_domains
+        self.source_urls = list(source_urls) if source_urls is not None else []
+        self.document_urls = list(document_urls) if document_urls is not None else []
+        self.query_domains = list(query_domains) if query_domains is not None else []
         self.config_path = config_path
         self.tone = tone
         self.websocket = websocket
-        self.subtopics = subtopics
+        self.subtopics = list(subtopics) if subtopics is not None else []
         self.headers = headers or {}
         self.complement_source_urls = complement_source_urls
         

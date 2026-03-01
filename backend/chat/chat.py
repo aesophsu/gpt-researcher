@@ -14,17 +14,7 @@ from gpt_researcher.utils.tools import create_chat_completion_with_tools, create
 from tavily import TavilyClient
 from datetime import datetime
 
-# Setup logging
-# Get logger instance
 logger = logging.getLogger(__name__)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler()  # Only log to console
-    ]
-)
 
 # Note: LLM client is now handled through GPT Researcher's unified LLM system
 # This supports all configured providers (OpenAI, Google Gemini, Anthropic, etc.)

@@ -284,6 +284,10 @@ def get_config_dict(
 
 
 def update_environment_variables(config: Dict[str, str]):
+    """Deprecated: mutates process-wide env vars and may leak across requests."""
+    logger.warning(
+        "update_environment_variables() is deprecated and should not be used in request paths."
+    )
     for key, value in config.items():
         os.environ[key] = value
 

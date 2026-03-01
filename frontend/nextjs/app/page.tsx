@@ -37,7 +37,7 @@ export default function Home() {
     // Default settings
     const defaultSettings = {
       report_type: "research_report",
-      report_source: "web",
+      report_source: "hybrid",
       tone: "Objective",
       domains: [],
       defaultReportType: "research_report",
@@ -483,7 +483,7 @@ export default function Home() {
           messages: [{ role: 'user', content: newQuestion }],
           // Include the required parameters
           report: '',  // No report since this is a new research
-          report_source: chatBoxSettings.report_source || 'web',
+          report_source: chatBoxSettings.report_source || 'hybrid',
           tone: chatBoxSettings.tone || 'Objective'
         }),
         // Set reasonable timeout
@@ -584,7 +584,7 @@ export default function Home() {
         body: JSON.stringify({
           messages: [userMessage],
           report: answer || '',
-          report_source: chatBoxSettings.report_source || 'web',
+          report_source: chatBoxSettings.report_source || 'hybrid',
           tone: chatBoxSettings.tone || 'Objective'
         }),
         // Set reasonable timeout

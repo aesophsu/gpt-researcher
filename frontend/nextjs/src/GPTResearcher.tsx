@@ -38,7 +38,7 @@ export const GPTResearcher = ({
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [chatBoxSettings, setChatBoxSettings] = useState<ChatBoxSettings>({ 
-    report_source: 'web', 
+    report_source: 'hybrid', 
     report_type: 'research_report', 
     tone: 'Objective',
     domains: [],

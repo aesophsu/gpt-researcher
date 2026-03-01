@@ -36,7 +36,7 @@ export default function ResearchPage({ params }: { params: { id: string } }) {
   const [chatBoxSettings, setChatBoxSettings] = useState<ChatBoxSettings>(() => {
     // Default settings
     const defaultSettings = {
-      report_source: "web",
+      report_source: "hybrid",
       report_type: "research_report",
       tone: "Objective",
       domains: [],

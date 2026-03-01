@@ -23,6 +23,8 @@ from backend.server.server_utils import (
     handle_file_upload, 
     handle_file_deletion
 )
+from backend.server import websocket_manager
+from gpt_researcher.utils.enum import Tone
 
 
 class TestSecureFilename:
@@ -345,6 +347,49 @@ class TestSecurityIntegration:
         for filename in legitimate_files:
             result = secure_filename(filename)
             assert result == filename  # Should pass through unchanged
+
+
+class TestEnvironmentIsolation:
+    """Ensure per-request MCP options do not mutate process environment."""
+
+    @pytest.mark.asyncio
+    async def test_run_agent_does_not_mutate_retriever_env(self, monkeypatch):
+        class DummyLogsHandler:
+            def __init__(self, websocket, task):
+                self.websocket = websocket
+                self.task = task
+
+            async def send_json(self, _data):
+                return None
+
+        class DummyBasicReport:
+            def __init__(self, **kwargs):
+                self.gpt_researcher = object()
+
+            async def run(self):
+                return "ok"
+
+        monkeypatch.setattr(websocket_manager, "CustomLogsHandler", DummyLogsHandler)
+        monkeypatch.setattr(websocket_manager, "BasicReport", DummyBasicReport)
+
+        monkeypatch.setenv("RETRIEVER", "tavily")
+        monkeypatch.setenv("MCP_STRATEGY", "fast")
+
+        await websocket_manager.run_agent(
+            task="test query",
+            report_type="research_report",
+            report_source="web",
+            source_urls=[],
+            document_urls=[],
+            tone=Tone.Objective,
+            websocket=None,
+            mcp_enabled=True,
+            mcp_strategy="deep",
+            mcp_configs=[{"name": "mock-mcp"}],
+        )
+
+        assert os.environ["RETRIEVER"] == "tavily"
+        assert os.environ["MCP_STRATEGY"] == "fast"
 
 
 if __name__ == "__main__":
