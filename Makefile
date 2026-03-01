@@ -4,7 +4,7 @@ MAIN_BRANCH ?= main
 UPSTREAM_NAME ?= upstream
 UPSTREAM_URL ?= https://github.com/assafelovic/gpt-researcher.git
 
-.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify nix-shell bootstrap backend-dev frontend-dev dev
+.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify nix-shell bootstrap backend-dev frontend-dev dev local-health zotero-import zotero-reindex zotero-import-fast
 
 help:
 	@echo "Available targets:"
@@ -19,6 +19,10 @@ help:
 	@echo "  make backend-dev     # Run FastAPI backend on 127.0.0.1:8000"
 	@echo "  make frontend-dev    # Run NextJS frontend on 127.0.0.1:3000"
 	@echo "  make dev             # Print two-terminal dev workflow"
+	@echo "  make local-health    # Check Ollama/Qdrant/Zotero local pipeline health"
+	@echo "  make zotero-import   # Import Zotero PDFs -> Ollama embeddings -> Qdrant"
+	@echo "  make zotero-reindex  # Rebuild fixed Zotero Qdrant collection from scratch"
+	@echo "  make zotero-import-fast # Import with larger batch size (BATCH_SIZE=128)"
 	@echo "  make safety-branch   # Create chore/sync-YYYYMMDD branch"
 	@echo "  make verify          # Verify remotes and recent commits"
 	@echo "  make update-all      # sync + nix-update + deps"
@@ -96,6 +100,22 @@ frontend-dev:
 dev:
 	@echo "Run in terminal A: make backend-dev"
 	@echo "Run in terminal B: make frontend-dev"
+
+local-health:
+	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
+		bash scripts/health_local.sh
+
+zotero-import:
+	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
+		bash scripts/import_zotero_local.sh
+
+zotero-reindex:
+	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
+		bash scripts/import_zotero_local.sh --recreate
+
+zotero-import-fast:
+	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
+		BATCH_SIZE=128 bash scripts/import_zotero_local.sh
 
 verify:
 	@git remote -v

@@ -145,6 +145,18 @@ Response fields:
 - `QDRANT_PREFER_GRPC`: use gRPC transport (`true/false`, default: `false`)
 - `QDRANT_TIMEOUT_SECONDS`: client timeout (default: `10`)
 - `QDRANT_FORCE_DISABLED`: force disable Qdrant and use JSON fallback only (`true/false`, default: `false`)
+- Hybrid web retrieval tuning (academic-first with Tavily fallback):
+  - `RETRIEVER`: recommended `pubmed_central,semantic_scholar,tavily`
+  - `RETRIEVER_PRIORITY_MODE`: `staged` (default) or `parallel`
+  - `MAX_SEARCH_RESULTS_PER_QUERY`: per-query cap (default: `7`)
+  - `MAX_ITERATIONS`: planning iterations (default: `2`)
+  - `MEDICAL_TIME_WINDOW_YEARS`: soft recency preference (default: `5`)
+  - `MIN_UNIQUE_SOURCES`: staged retrieval target before stopping Tavily fallback (default: `8`)
+  - `TAVILY_EFFICIENCY_MODE`: dynamic Tavily `max_results` based on deficit (`true/false`)
+  - `TAVILY_SOFT_FALLBACK`: expand Tavily domain tiers if not enough unique sources (`true/false`)
+  - `DOMAIN_TIER0`, `DOMAIN_TIER1`, `DOMAIN_TIER2`: comma-separated include-domain tiers
+  - `RERANK_EXPLAIN_LOG_MODE`: rerank explanation logging mode (`dual|json|console`, default `dual`)
+  - `RERANK_EXPLAIN_SCOPE`: number of top-ranked results with detailed explain output (default `10`)
 - LLM keys for polish rewrite (optional but recommended):
   - `OPENAI_API_KEY`
   - `ANTHROPIC_API_KEY`

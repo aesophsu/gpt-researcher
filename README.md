@@ -260,6 +260,26 @@ Step 2:
  - If you're running the frontend app on localhost:8000, simply select "My Documents" from the "Report Source" Dropdown Options.
  - If you're running GPT Researcher with the [Python package](https://docs.tavily.com/guides/gpt-researcher/gpt-researcher#pip-package) via `uv`, pass the `report_source` argument as "local" when you instantiate the `GPTResearcher` class [code sample here](https://docs.gptr.dev/docs/gpt-researcher/context/tailored-research).
 
+### Local Zotero -> Ollama -> Qdrant Workflow
+
+For local personal usage with Zotero PDFs, Ollama `bge-m3`, and Qdrant:
+
+```bash
+# 1) Check local health (Ollama/Qdrant/Zotero paths/collection)
+make local-health
+
+# 2) Import Zotero PDFs into fixed Qdrant collection
+make zotero-import
+
+# 3) Force full rebuild (recreate collection)
+make zotero-reindex
+
+# 4) Faster import on stronger machines
+make zotero-import-fast
+```
+
+Default collection name is controlled by `ZOTERO_QDRANT_COLLECTION` in `.env`.
+
 
 ## 🤖 MCP Server
 

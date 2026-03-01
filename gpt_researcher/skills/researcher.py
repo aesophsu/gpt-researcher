@@ -8,7 +8,11 @@ and context gathering.
 import asyncio
 import logging
 import os
-import random
+import re
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Literal
+from urllib.parse import urlparse
 
 from ..actions.agent_creator import choose_agent
 from ..actions.query_processing import get_search_results, plan_research_outline
@@ -16,6 +20,39 @@ from ..actions.utils import stream_output
 from ..document import DocumentLoader, LangChainDocumentLoader, OnlineDocumentLoader
 from ..utils.enum import ReportSource, ReportType
 from ..utils.logging_config import get_json_handler
+
+
+EvidenceType = Literal[
+    "guideline",
+    "systematic_review",
+    "meta_analysis",
+    "rct",
+    "cohort",
+    "case_control",
+    "case_report",
+    "review",
+    "unknown",
+]
+
+
+@dataclass
+class NormalizedResult:
+    url: str
+    title: str
+    snippet: str
+    source: Literal["pubmed", "semantic", "tavily", "other"]
+    source_rank_weight: float
+    year: int | None = None
+    doi: str | None = None
+    journal: str | None = None
+    evidence_type: EvidenceType = "unknown"
+    open_access: bool | None = None
+    domain: str = ""
+    raw_score: float = 0.0
+    final_score: float = 0.0
+    score_breakdown: dict[str, float] = field(default_factory=dict)
+    explain: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 class ResearchConductor:
@@ -749,37 +786,479 @@ class ResearchConductor:
         return new_urls
 
     async def _search_relevant_source_urls(self, query, query_domains: list | None = None):
-        new_search_urls = []
         if query_domains is None:
             query_domains = []
 
-        # Iterate through the currently set retrievers
-        # This allows the method to work when retrievers are temporarily modified
-        for retriever_class in self.researcher.retrievers:
-            # Skip MCP retrievers as they don't provide URLs for scraping
-            if "mcpretriever" in retriever_class.__name__.lower():
-                continue
-                
-            try:
-                # Instantiate the retriever with the sub-query
-                retriever = retriever_class(query, query_domains=query_domains)
+        non_mcp_retrievers = [
+            retriever_class
+            for retriever_class in self.researcher.retrievers
+            if "mcpretriever" not in retriever_class.__name__.lower()
+        ]
+        if not non_mcp_retrievers:
+            return []
 
-                # Perform the search using the current retriever
-                search_results = await asyncio.to_thread(
-                    retriever.search, max_results=self.researcher.cfg.max_search_results_per_query
+        priority_mode = getattr(self.researcher.cfg, "retriever_priority_mode", "parallel")
+        if priority_mode != "staged":
+            ranked_urls = await self._run_parallel_retrieval(query, query_domains, non_mcp_retrievers)
+            return await self._get_new_urls(ranked_urls)
+
+        ranked_urls = await self._run_staged_retrieval(query, query_domains, non_mcp_retrievers)
+        return await self._get_new_urls(ranked_urls)
+
+    async def _run_parallel_retrieval(self, query: str, query_domains: list[str], retrievers: list[type]) -> list[str]:
+        max_results = max(1, int(self.researcher.cfg.max_search_results_per_query))
+        aggregated: list[NormalizedResult] = []
+
+        for retriever_class in retrievers:
+            results = await self._search_with_retriever(
+                retriever_class=retriever_class,
+                query=query,
+                query_domains=query_domains,
+                max_results=max_results,
+            )
+            aggregated.extend(results)
+
+        return self._rank_and_extract_urls(query, aggregated)
+
+    async def _run_staged_retrieval(self, query: str, query_domains: list[str], retrievers: list[type]) -> list[str]:
+        retriever_map = {self._retriever_key(r): r for r in retrievers}
+        pubmed = retriever_map.get("pubmed")
+        semantic = retriever_map.get("semantic")
+        tavily = retriever_map.get("tavily")
+        others = [r for key, r in retriever_map.items() if key not in {"pubmed", "semantic", "tavily"}]
+
+        effective_query = self._augment_query_for_time_window(query)
+        aggregated: list[NormalizedResult] = []
+
+        # Stage A: academic-first retrieval
+        if pubmed:
+            aggregated.extend(
+                await self._search_with_retriever(
+                    retriever_class=pubmed,
+                    query=effective_query,
+                    query_domains=query_domains,
+                    max_results=4,
+                )
+            )
+        if semantic:
+            aggregated.extend(
+                await self._search_with_retriever(
+                    retriever_class=semantic,
+                    query=effective_query,
+                    query_domains=query_domains,
+                    max_results=3,
+                )
+            )
+
+        for retriever_class in others:
+            aggregated.extend(
+                await self._search_with_retriever(
+                    retriever_class=retriever_class,
+                    query=effective_query,
+                    query_domains=query_domains,
+                    max_results=max(1, int(self.researcher.cfg.max_search_results_per_query)),
+                )
+            )
+
+        unique_count = len(self._dedupe_results(aggregated))
+        min_unique_sources = max(1, int(getattr(self.researcher.cfg, "min_unique_sources", 8)))
+        deficit = max(0, min_unique_sources - unique_count)
+
+        # Stage B: Tavily top-up only if needed
+        if tavily and deficit > 0:
+            for include_domains in self._build_tavily_domain_tiers(query_domains):
+                tavily_results = await self._search_with_retriever(
+                    retriever_class=tavily,
+                    query=effective_query,
+                    query_domains=include_domains,
+                    max_results=self._tavily_dynamic_max_results(deficit),
+                )
+                aggregated.extend(tavily_results)
+                unique_count = len(self._dedupe_results(aggregated))
+                deficit = max(0, min_unique_sources - unique_count)
+                if deficit <= 0:
+                    break
+
+        ranked_urls = self._rank_and_extract_urls(query, aggregated)
+        self.logger.info(
+            "Retriever staged mode complete: query='%s' unique_sources=%s target=%s tavily_needed=%s",
+            query,
+            len(ranked_urls),
+            min_unique_sources,
+            "yes" if unique_count < min_unique_sources else "no",
+        )
+        return ranked_urls
+
+    async def _search_with_retriever(
+        self,
+        retriever_class,
+        query: str,
+        query_domains: list[str],
+        max_results: int,
+    ) -> list[NormalizedResult]:
+        retriever_name = retriever_class.__name__
+        try:
+            retriever = retriever_class(query, query_domains=query_domains)
+            search_results = await asyncio.to_thread(retriever.search, max_results=max_results)
+            if not search_results:
+                return []
+            normalized = self._normalize_batch(search_results, self._retriever_key(retriever_class), query)
+            self.logger.info(
+                "Retriever %s returned %s results (max_results=%s, domains=%s)",
+                retriever_name,
+                len(normalized),
+                max_results,
+                query_domains if query_domains else "all",
+            )
+            return normalized
+        except Exception as e:
+            self.logger.error("Error searching with %s: %s", retriever_name, e)
+            return []
+
+    def _retriever_key(self, retriever_class) -> str:
+        name = retriever_class.__name__.lower()
+        if "pubmed" in name:
+            return "pubmed"
+        if "semantic" in name:
+            return "semantic"
+        if "tavily" in name:
+            return "tavily"
+        return name
+
+    def _augment_query_for_time_window(self, query: str) -> str:
+        years = max(0, int(getattr(self.researcher.cfg, "medical_time_window_years", 0)))
+        if years <= 0:
+            return query
+        current_year = datetime.now().year
+        earliest = current_year - years
+        return f"{query} (prioritize evidence published since {earliest})"
+
+    def _normalize_batch(self, items: list[dict], source: str, query: str) -> list[NormalizedResult]:
+        normalized: list[NormalizedResult] = []
+        for item in items:
+            normalized_item = self._normalize_result(item, source, query)
+            if normalized_item is not None:
+                normalized.append(normalized_item)
+        return normalized
+
+    def _normalize_result(self, item: dict, retriever_key: str, query: str) -> NormalizedResult | None:
+        url = (item.get("href") or item.get("url") or "").strip()
+        if not url:
+            return None
+
+        source = retriever_key if retriever_key in {"pubmed", "semantic", "tavily"} else "other"
+        title = (item.get("title") or "").strip()
+        snippet = (item.get("body") or item.get("content") or item.get("raw_content") or "").strip()
+        snippet = re.sub(r"\s+", " ", snippet)[:1200]
+
+        text = f"{title} {snippet}".strip()
+        domain = urlparse(url).netloc.lower().strip()
+        year = self._infer_year(text, item)
+        doi = self._extract_doi(text)
+        journal = self._infer_journal(text, domain, item)
+        evidence_type = self._infer_evidence_type(text, title)
+        open_access = self._is_open_access(item, source, url)
+        source_rank_weight = {"pubmed": 1.0, "semantic": 0.85, "tavily": 0.65, "other": 0.55}[source]
+
+        return NormalizedResult(
+            url=url,
+            title=title,
+            snippet=snippet,
+            source=source,
+            source_rank_weight=source_rank_weight,
+            year=year,
+            doi=doi,
+            journal=journal,
+            evidence_type=evidence_type,
+            open_access=open_access,
+            domain=domain,
+            raw_score=source_rank_weight,
+            raw=dict(item),
+        )
+
+    def _infer_year(self, text: str, item: dict) -> int | None:
+        year_value = item.get("year")
+        current_year = datetime.now().year
+        if isinstance(year_value, int) and 1900 <= year_value <= current_year + 1:
+            return year_value
+
+        years = [int(y) for y in re.findall(r"\b(19\d{2}|20\d{2})\b", text or "")]
+        valid_years = [y for y in years if 1900 <= y <= current_year + 1]
+        return max(valid_years) if valid_years else None
+
+    def _extract_doi(self, text: str) -> str | None:
+        if not text:
+            return None
+        match = re.search(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b", text)
+        if not match:
+            return None
+        doi = match.group(0)
+        return doi if len(doi) <= 128 else None
+
+    def _infer_journal(self, text: str, domain: str, item: dict) -> str | None:
+        for key in ("journal", "venue", "publication", "publicationTitle"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()[:160]
+
+        known = {
+            "nejm.org": "New England Journal of Medicine",
+            "thelancet.com": "The Lancet",
+            "jamanetwork.com": "JAMA Network",
+            "bmj.com": "BMJ",
+            "nature.com": "Nature",
+            "sciencedirect.com": "ScienceDirect",
+        }
+        for d, journal in known.items():
+            if domain.endswith(d):
+                return journal
+
+        lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+        if lines and "journal" in lines[0].lower():
+            return lines[0][:160]
+        return None
+
+    def _infer_evidence_type(self, text: str, title: str) -> EvidenceType:
+        content = f"{title} {text}".lower()
+        rules: list[tuple[EvidenceType, tuple[str, ...]]] = [
+            ("guideline", ("guideline", "consensus statement", "practice recommendation")),
+            ("meta_analysis", ("meta-analysis", "meta analysis")),
+            ("systematic_review", ("systematic review",)),
+            ("rct", ("randomized", "randomised", "controlled trial", "rct")),
+            ("cohort", ("cohort",)),
+            ("case_control", ("case-control", "case control")),
+            ("case_report", ("case report",)),
+            ("review", ("review",)),
+        ]
+        for evidence_type, keywords in rules:
+            if any(keyword in content for keyword in keywords):
+                return evidence_type
+        return "unknown"
+
+    def _is_open_access(self, item: dict, source: str, url: str) -> bool | None:
+        if isinstance(item.get("isOpenAccess"), bool):
+            return item["isOpenAccess"]
+        if isinstance(item.get("open_access"), bool):
+            return item["open_access"]
+        if source == "pubmed" and "/pmc/articles/" in url:
+            return True
+        return None
+
+    def _parse_domain_list(self, value: str | None) -> list[str]:
+        if not value:
+            return []
+        return [domain.strip() for domain in value.split(",") if domain.strip()]
+
+    def _build_tavily_domain_tiers(self, query_domains: list[str]) -> list[list[str]]:
+        # Respect explicit user domain filters first.
+        if query_domains:
+            return [query_domains]
+
+        tier0 = self._parse_domain_list(getattr(self.researcher.cfg, "domain_tier0", ""))
+        tiers = [tier0] if tier0 else [[]]
+
+        soft_fallback = bool(getattr(self.researcher.cfg, "tavily_soft_fallback", True))
+        if not soft_fallback:
+            return tiers
+
+        tier1 = self._parse_domain_list(getattr(self.researcher.cfg, "domain_tier1", ""))
+        tier2 = self._parse_domain_list(getattr(self.researcher.cfg, "domain_tier2", ""))
+        if tier1:
+            tiers.append(tier1)
+        if tier2:
+            tiers.append(tier2)
+        return tiers
+
+    def _tavily_dynamic_max_results(self, deficit: int) -> int:
+        efficiency_mode = bool(getattr(self.researcher.cfg, "tavily_efficiency_mode", True))
+        base_cap = max(1, int(self.researcher.cfg.max_search_results_per_query))
+        if not efficiency_mode:
+            return base_cap
+        # Fetch only the missing window plus a small buffer for dedupe.
+        return max(1, min(base_cap, deficit + 2))
+
+    def _source_priority(self, source: str) -> int:
+        return {"pubmed": 3, "semantic": 2, "tavily": 1, "other": 0}.get(source, 0)
+
+    def _pick_better_duplicate(self, existing: NormalizedResult, candidate: NormalizedResult) -> NormalizedResult:
+        existing_score = existing.final_score if existing.final_score else existing.raw_score
+        candidate_score = candidate.final_score if candidate.final_score else candidate.raw_score
+        if candidate_score > existing_score + 0.03:
+            return candidate
+        if abs(candidate_score - existing_score) < 0.03:
+            if self._source_priority(candidate.source) > self._source_priority(existing.source):
+                return candidate
+        return existing
+
+    def _dedupe_results(self, results: list[NormalizedResult]) -> list[NormalizedResult]:
+        by_doi: dict[str, NormalizedResult] = {}
+        by_url: dict[str, NormalizedResult] = {}
+
+        for item in results:
+            if not item.url:
+                continue
+            normalized_url = item.url.strip().lower().rstrip("/")
+            if not normalized_url:
+                continue
+
+            if item.doi:
+                doi_key = item.doi.lower().strip()
+                existing = by_doi.get(doi_key)
+                if existing is None:
+                    by_doi[doi_key] = item
+                else:
+                    by_doi[doi_key] = self._pick_better_duplicate(existing, item)
+                continue
+
+            existing_url = by_url.get(normalized_url)
+            if existing_url is None:
+                by_url[normalized_url] = item
+            else:
+                by_url[normalized_url] = self._pick_better_duplicate(existing_url, item)
+
+        final_items = list(by_doi.values()) + list(by_url.values())
+        final_items = list({id(v): v for v in final_items}.values())
+        # keep deterministic ordering by final_score/raw_score then url
+        final_items.sort(key=lambda x: (x.final_score if x.final_score else x.raw_score, x.url), reverse=True)
+        return final_items
+
+    def _compute_score_breakdown(self, query: str, item: NormalizedResult) -> dict[str, float]:
+        query_tokens = {token for token in re.findall(r"[a-z0-9]{3,}", query.lower())}
+        text_tokens = {token for token in re.findall(r"[a-z0-9]{3,}", f"{item.title} {item.snippet}".lower())}
+        overlap = len(query_tokens.intersection(text_tokens))
+
+        breakdown = {
+            "source_weight": item.source_rank_weight,
+            "query_overlap": min(0.3, overlap * 0.02),
+            "doi_bonus": 0.2 if item.doi else 0.0,
+            "evidence_type_bonus": {
+                "guideline": 0.16,
+                "meta_analysis": 0.14,
+                "systematic_review": 0.12,
+                "rct": 0.1,
+                "cohort": 0.06,
+                "case_control": 0.04,
+                "case_report": 0.02,
+                "review": 0.03,
+                "unknown": 0.0,
+            }.get(item.evidence_type, 0.0),
+            "recency_bonus": 0.0,
+            "domain_trust_bonus": 0.0,
+            "low_quality_penalty": 0.0,
+        }
+
+        window = max(0, int(getattr(self.researcher.cfg, "medical_time_window_years", 0)))
+        if item.year is not None and window > 0:
+            if item.year >= datetime.now().year - window:
+                breakdown["recency_bonus"] = 0.08
+
+        tier0 = set(self._parse_domain_list(getattr(self.researcher.cfg, "domain_tier0", "")))
+        tier1 = set(self._parse_domain_list(getattr(self.researcher.cfg, "domain_tier1", "")))
+        if item.domain in tier0:
+            breakdown["domain_trust_bonus"] = 0.05
+        elif item.domain in tier1:
+            breakdown["domain_trust_bonus"] = 0.03
+
+        if any(low_q in item.domain for low_q in ("medium.com", "blogspot.", "wordpress.", "reddit.com")):
+            breakdown["low_quality_penalty"] = -0.15
+
+        return breakdown
+
+    def _make_explain_line(self, item: NormalizedResult) -> str:
+        bd = item.score_breakdown
+        return (
+            f"source={item.source}({bd.get('source_weight', 0):.2f}) "
+            f"overlap={bd.get('query_overlap', 0):.2f} "
+            f"doi={bd.get('doi_bonus', 0):.2f} "
+            f"evidence={item.evidence_type}({bd.get('evidence_type_bonus', 0):.2f}) "
+            f"recency={bd.get('recency_bonus', 0):.2f} "
+            f"domain={bd.get('domain_trust_bonus', 0):.2f} "
+            f"penalty={bd.get('low_quality_penalty', 0):.2f}"
+        )
+
+    def _apply_rerank(self, query: str, results: list[NormalizedResult]) -> list[NormalizedResult]:
+        for item in results:
+            breakdown = self._compute_score_breakdown(query, item)
+            final_score = sum(breakdown.values())
+            item.score_breakdown = breakdown
+            item.final_score = round(final_score, 4)
+            item.explain = self._make_explain_line(item)
+
+        return sorted(results, key=lambda r: r.final_score, reverse=True)
+
+    def _emit_rerank_logs(
+        self,
+        query: str,
+        mode: str,
+        candidates_total: int,
+        deduped_total: int,
+        ranked: list[NormalizedResult],
+    ) -> None:
+        log_mode = str(getattr(self.researcher.cfg, "rerank_explain_log_mode", "dual")).lower()
+        explain_scope = max(1, int(getattr(self.researcher.cfg, "rerank_explain_scope", 10)))
+        top_items = ranked[:explain_scope]
+
+        if log_mode in {"dual", "console"}:
+            self.logger.info(
+                "Rerank explain summary | mode=%s candidates=%s deduped=%s top_n=%s",
+                mode,
+                candidates_total,
+                deduped_total,
+                len(top_items),
+            )
+            for idx, item in enumerate(top_items, start=1):
+                doi_flag = "yes" if item.doi else "no"
+                self.logger.info(
+                    "RERANK #%s | %s | score=%.4f | year=%s | doi=%s | evidence=%s | domain=%s | title=%s",
+                    idx,
+                    item.source,
+                    item.final_score,
+                    item.year,
+                    doi_flag,
+                    item.evidence_type,
+                    item.domain,
+                    item.title[:120],
                 )
 
-                # Collect new URLs from search results
-                search_urls = [url.get("href") for url in search_results if url.get("href")]
-                new_search_urls.extend(search_urls)
-            except Exception as e:
-                self.logger.error(f"Error searching with {retriever_class.__name__}: {e}")
+        if log_mode in {"dual", "json"} and self.json_handler:
+            self.json_handler.log_event(
+                "retrieval_rerank_explain",
+                {
+                    "query": query,
+                    "mode": mode,
+                    "candidates_total": candidates_total,
+                    "deduped_total": deduped_total,
+                    "top_n": len(top_items),
+                    "results": [
+                        {
+                            "rank": idx,
+                            "url": item.url,
+                            "source": item.source,
+                            "final_score": item.final_score,
+                            "score_breakdown": item.score_breakdown,
+                            "explain": item.explain,
+                            "year": item.year,
+                            "doi": item.doi,
+                            "journal": item.journal,
+                            "evidence_type": item.evidence_type,
+                        }
+                        for idx, item in enumerate(top_items, start=1)
+                    ],
+                },
+            )
 
-        # Get unique URLs
-        new_search_urls = await self._get_new_urls(new_search_urls)
-        random.shuffle(new_search_urls)
-
-        return new_search_urls
+    def _rank_and_extract_urls(self, query: str, results: list[NormalizedResult]) -> list[str]:
+        deduped = self._dedupe_results(results)
+        ranked = self._apply_rerank(query, deduped)
+        mode = str(getattr(self.researcher.cfg, "retriever_priority_mode", "parallel"))
+        self._emit_rerank_logs(
+            query=query,
+            mode=mode,
+            candidates_total=len(results),
+            deduped_total=len(deduped),
+            ranked=ranked,
+        )
+        return [item.url for item in ranked if item.url]
 
     async def _scrape_data_by_urls(self, sub_query, query_domains: list | None = None):
         """
@@ -986,4 +1465,3 @@ class ResearchConductor:
                     "progress": progress
                 }
             )
-
