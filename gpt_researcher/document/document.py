@@ -12,6 +12,8 @@ from langchain_community.document_loaders import (
 )
 from langchain_community.document_loaders import BSHTMLLoader
 
+from .pdf_section_splitter import PDFSectionSplitter
+
 
 class DocumentLoader:
 
@@ -48,12 +50,31 @@ class DocumentLoader:
 
         docs = []
         for pages in await asyncio.gather(*tasks):
-            for page in pages:
-                if page.page_content:
-                    docs.append({
-                        "raw_content": page.page_content,
-                        "url": os.path.basename(page.metadata['source'])
-                    })
+            if not pages:
+                continue
+
+            source = os.path.basename(pages[0].metadata.get("source", ""))
+            extension = os.path.splitext(source)[1].lower()
+
+            if extension == ".pdf":
+                full_text = "\n\n".join(
+                    page.page_content for page in pages if page.page_content
+                ).strip()
+                for section in PDFSectionSplitter.split(full_text):
+                    docs.append(
+                        {
+                            "raw_content": section["raw_content"],
+                            "url": source,
+                            "section": section["section"],
+                        }
+                    )
+            else:
+                for page in pages:
+                    if page.page_content:
+                        docs.append({
+                            "raw_content": page.page_content,
+                            "url": os.path.basename(page.metadata['source'])
+                        })
                     
         if not docs:
             raise ValueError("🤷 Failed to load any documents!")

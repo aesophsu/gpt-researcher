@@ -123,20 +123,20 @@ See the [Documentation](https://docs.gptr.dev/docs/gpt-researcher/getting-starte
     export OPENAI_BASE_URL={Your custom API base URL here}
     ```
 
-4. Install dependencies and start the server:
+4. Install dependencies and start the server with `uv`:
 
     ```bash
-    pip install -r requirements.txt
-    python -m uvicorn main:app --reload
+    uv sync
+    uv run python -m uvicorn main:app --reload
     ```
 
 Visit [http://localhost:8000](http://localhost:8000) to start.
 
-For other setups (e.g., Poetry or virtual environments), check the [Getting Started page](https://docs.gptr.dev/docs/gpt-researcher/getting-started).
+For other setups, check the [Getting Started page](https://docs.gptr.dev/docs/gpt-researcher/getting-started).
 
-## Run as PIP package
+## Run as Python package (via uv)
 ```bash
-pip install gpt-researcher
+uv tool install gpt-researcher
 
 ```
 ### Example Usage:
@@ -153,7 +153,7 @@ report = await researcher.write_report()
 ...
 ```
 
-**For more examples and configurations, please refer to the [PIP documentation](https://docs.gptr.dev/docs/gpt-researcher/gptr/pip-package) page.**
+**For more examples and configurations, please refer to the [Python package documentation](https://docs.gptr.dev/docs/gpt-researcher/gptr/pip-package) page.**
 
 ### 🔧 MCP Client
 GPT Researcher supports MCP integration to connect with specialized data sources like GitHub repositories, databases, and custom APIs. This enables research from data sources alongside web search.
@@ -258,7 +258,7 @@ export DOC_PATH="./my-docs"
 
 Step 2: 
  - If you're running the frontend app on localhost:8000, simply select "My Documents" from the "Report Source" Dropdown Options.
- - If you're running GPT Researcher with the [PIP package](https://docs.tavily.com/guides/gpt-researcher/gpt-researcher#pip-package), pass the `report_source` argument as "local" when you instantiate the `GPTResearcher` class [code sample here](https://docs.gptr.dev/docs/gpt-researcher/context/tailored-research).
+ - If you're running GPT Researcher with the [Python package](https://docs.tavily.com/guides/gpt-researcher/gpt-researcher#pip-package) via `uv`, pass the `report_source` argument as "local" when you instantiate the `GPTResearcher` class [code sample here](https://docs.gptr.dev/docs/gpt-researcher/context/tailored-research).
 
 
 ## 🤖 MCP Server

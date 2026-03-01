@@ -551,6 +551,7 @@ Instructions:
     def pretty_print_docs(docs: list[Document], top_n: int | None = None) -> str:
         """Compress the list of documents into a context string"""
         return f"\n".join(f"Source: {d.metadata.get('source')}\n"
+                          f"Section: {d.metadata.get('section')}\n"
                           f"Title: {d.metadata.get('title')}\n"
                           f"Content: {d.page_content}\n"
                           for i, d in enumerate(docs)

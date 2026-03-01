@@ -21,6 +21,7 @@ class SearchAPIRetriever(BaseRetriever):
                 metadata={
                     "title": page.get("title", ""),
                     "source": page.get("url", ""),
+                    "section": page.get("section", ""),
                 },
             )
             for page in self.pages

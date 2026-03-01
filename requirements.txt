@@ -14,6 +14,7 @@ langchain-community>=0.4.0
 langchain-core>=1.0.0
 langchain-ollama>=1.0.0
 langchain-openai>=1.0.0
+langchain-qdrant>=0.2.1
 langchain-text-splitters>=1.0.0
 langgraph>=0.2.76
 
@@ -38,6 +39,7 @@ lxml>=4.9.2
 # Vector Store & Embeddings
 tiktoken>=0.7.0
 numpy>=2.0.0,<2.3.0
+qdrant-client>=1.14.3
 
 # Utilities
 aiofiles>=23.2.1
@@ -64,4 +66,3 @@ python-multipart>=0.0.6
 json-repair>=0.29.8
 json5>=0.9.25
 markdown>=3.5.1
-

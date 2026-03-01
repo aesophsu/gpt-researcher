@@ -1,0 +1,107 @@
+{
+  "jobs": {
+    "e0a0bdb53d2f4f8c85447e66fbff5459": {
+      "job_id": "e0a0bdb53d2f4f8c85447e66fbff5459",
+      "job_type": "medical_ingest",
+      "status": "completed",
+      "created_at": 1772353254119,
+      "updated_at": 1772353255379,
+      "payload": {
+        "doc_path": "/tmp/medical_async_test",
+        "collection_name": "async-test",
+        "recursive": true
+      },
+      "progress": {
+        "stage": "completed",
+        "message": "ingest completed",
+        "total_files": 1,
+        "processed_files": 1,
+        "skipped_files": 0,
+        "indexed_docs": 1,
+        "chunks": 1,
+        "failed_files": 0
+      },
+      "result": {
+        "indexed_docs": 1,
+        "chunks": 1,
+        "skipped_files": 0,
+        "failed_files": [],
+        "index_backend": "qdrant",
+        "index_warnings": []
+      },
+      "error": null
+    },
+    "5b8fb79c0b3f4b1295560d56fc0562b2": {
+      "job_id": "5b8fb79c0b3f4b1295560d56fc0562b2",
+      "job_type": "medical_ingest",
+      "status": "completed",
+      "created_at": 1772353264554,
+      "updated_at": 1772353264594,
+      "payload": {
+        "doc_path": "/tmp/medical_async_test",
+        "collection_name": "async-test",
+        "recursive": true
+      },
+      "progress": {
+        "stage": "completed",
+        "message": "ingest completed",
+        "total_files": 1,
+        "processed_files": 1,
+        "skipped_files": 1,
+        "indexed_docs": 0,
+        "chunks": 0,
+        "failed_files": 0
+      },
+      "result": {
+        "indexed_docs": 0,
+        "chunks": 0,
+        "skipped_files": 1,
+        "failed_files": [],
+        "index_backend": "qdrant",
+        "index_warnings": []
+      },
+      "error": null
+    },
+    "2542776a0d884f0091ceeec97f5d4b20": {
+      "job_id": "2542776a0d884f0091ceeec97f5d4b20",
+      "job_type": "zotero_ingest",
+      "status": "completed",
+      "created_at": 1772353276144,
+      "updated_at": 1772353276393,
+      "payload": {
+        "collection_name": "zotero-async-test",
+        "pdf_dir": "/tmp/medical_async_test",
+        "zotero_json_path": null,
+        "bibtex_path": null,
+        "recursive": true
+      },
+      "progress": {
+        "stage": "completed",
+        "message": "zotero ingest completed",
+        "total_files": 1,
+        "processed_files": 1,
+        "skipped_files": 0,
+        "indexed_docs": 1,
+        "chunks": 1,
+        "failed_files": 0
+      },
+      "result": {
+        "indexed_docs": 1,
+        "chunks": 1,
+        "skipped_files": 0,
+        "failed_files": [],
+        "index_backend": "qdrant",
+        "index_warnings": [],
+        "collection_name": "zotero-async-test",
+        "match_stats": {
+          "pdf_files": 1,
+          "matched_metadata": 0,
+          "unmatched_pdf_files": 1,
+          "json_entries": 0,
+          "bib_entries": 0
+        }
+      },
+      "error": null
+    }
+  }
+}

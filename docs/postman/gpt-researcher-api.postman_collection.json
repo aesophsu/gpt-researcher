@@ -1,0 +1,447 @@
+{
+  "info": {
+    "_postman_id": "3c9d6d53-645f-4dd9-a282-7f5f14d9f1f7",
+    "name": "GPT Researcher API (Core + Medical)",
+    "description": "Postman collection for GPT Researcher backend APIs, including medical extension endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Core APIs",
+      "item": [
+        {
+          "name": "Health / Frontend Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Or Update Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"demo-report-001\",\n  \"question\": \"What are current trends in AI-assisted medical literature review?\",\n  \"answer\": \"Draft answer placeholder\",\n  \"orderedData\": [],\n  \"chatMessages\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Report By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "{{reportId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate Research Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"task\": \"Evaluate efficacy of GLP-1 receptor agonists in obesity treatment\",\n  \"report_type\": \"research_report\",\n  \"report_source\": \"hybrid\",\n  \"tone\": \"Objective\",\n  \"repo_name\": \"gpt-researcher\",\n  \"branch_name\": \"main\",\n  \"generate_in_background\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/report/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "report",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"report\": \"This is a short report context.\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"Summarize in 3 bullets.\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "files",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medical APIs",
+      "item": [
+        {
+          "name": "Medical Ingest (Local Docs)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doc_path\": \"{{docPath}}\",\n  \"collection_name\": \"med-default\",\n  \"recursive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/medical/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical",
+                "ingest"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medical Zotero Ingest (JSON + BibTeX + PDFs)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collection_name\": \"zotero-med\",\n  \"pdf_dir\": \"{{zoteroPdfDir}}\",\n  \"zotero_json_path\": \"{{zoteroJsonPath}}\",\n  \"bibtex_path\": \"{{zoteroBibPath}}\",\n  \"recursive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/medical/zotero-ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical",
+                "zotero-ingest"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medical Async Jobs",
+          "item": [
+            {
+              "name": "Medical Ingest Async",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "if (body.job_id) {",
+                      "  pm.collectionVariables.set('medicalJobId', body.job_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"doc_path\": \"{{docPath}}\",\n  \"collection_name\": \"med-default\",\n  \"recursive\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/medical/ingest/async",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "medical",
+                    "ingest",
+                    "async"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Medical Zotero Ingest Async",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "if (body.job_id) {",
+                      "  pm.collectionVariables.set('medicalJobId', body.job_id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"collection_name\": \"zotero-med\",\n  \"pdf_dir\": \"{{zoteroPdfDir}}\",\n  \"zotero_json_path\": \"{{zoteroJsonPath}}\",\n  \"bibtex_path\": \"{{zoteroBibPath}}\",\n  \"recursive\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/medical/zotero-ingest/async",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "medical",
+                    "zotero-ingest",
+                    "async"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Medical Job Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/medical/jobs/{{medicalJobId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "medical",
+                    "jobs",
+                    "{{medicalJobId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Medical Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"hypertension treatment 2024 New England Journal of Medicine\",\n  \"top_k\": 8,\n  \"sources\": \"hybrid\",\n  \"collection_name\": \"zotero-med\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/medical/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical",
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medical Polish",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This intervention significantly reduces mortality in critical care patients.\",\n  \"mode\": \"journal\",\n  \"journal_style\": \"NEJM\",\n  \"require_evidence\": true,\n  \"strict_fact_mode\": true,\n  \"section_type\": \"results\",\n  \"target_journal\": \"New England Journal of Medicine\",\n  \"collection_name\": \"zotero-med\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/medical/polish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical",
+                "polish"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Medical Citation Audit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"manuscript_text\": \"Treatment significantly reduces mortality [2]. Another analysis confirmed this (Smith, 2022).\",\n  \"format\": \"vancouver\",\n  \"references\": [\n    \"[1] Johnson et al. Critical Care. 2021.\",\n    \"[2] Smith et al. ICU Trial. 2022.\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/medical/citation-audit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "medical",
+                "citation-audit"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "reportId",
+      "value": "demo-report-001"
+    },
+    {
+      "key": "docPath",
+      "value": "/Users/sue/Code/gpt-researcher/my-docs"
+    },
+    {
+      "key": "zoteroPdfDir",
+      "value": "/Users/sue/Zotero/storage"
+    },
+    {
+      "key": "zoteroJsonPath",
+      "value": "/Users/sue/Zotero/My Library.json"
+    },
+    {
+      "key": "zoteroBibPath",
+      "value": "/Users/sue/Zotero/My Library.bib"
+    },
+    {
+      "key": "medicalJobId",
+      "value": ""
+    }
+  ]
+}

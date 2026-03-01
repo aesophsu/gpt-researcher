@@ -25,7 +25,13 @@ class VectorStoreWrapper:
     
     def _create_langchain_documents(self, data: List[Dict[str, str]]) -> List[Document]:
         """Convert GPT Researcher Document to Langchain Document"""
-        return [Document(page_content=item["raw_content"], metadata={"source": item["url"]}) for item in data]
+        documents = []
+        for item in data:
+            metadata = {"source": item["url"]}
+            if item.get("section"):
+                metadata["section"] = item["section"]
+            documents.append(Document(page_content=item["raw_content"], metadata=metadata))
+        return documents
 
     def _split_documents(self, documents: List[Document], chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
         """

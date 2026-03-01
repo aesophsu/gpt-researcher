@@ -23,6 +23,7 @@ langchain-classic = "^1.0.0"
 langchain_community = "^0.4.0"
 langchain-core = "^1.0.0"
 langchain-openai = "^1.0.0"
+langchain-qdrant = "^0.2.1"
 langchain-text-splitters = "^1.0.0"
 langgraph = ">=0.2.73,<0.3"
 loguru = "^0.7.2"
@@ -38,6 +39,7 @@ python-dotenv = ">=1.0.0"
 python-multipart = ">=0.0.6"
 pyyaml = ">=6.0.1"
 requests = ">=2.31.0"
+qdrant-client = "^1.14.3"
 SQLAlchemy = ">=2.0.28"
 tiktoken = ">=0.7.0"
 unstructured = ">=0.13"
@@ -129,6 +131,7 @@ dependencies = [
     "langchain-core>=1.0.0",
     "langchain-ollama>=1.0.0",
     "langchain-openai>=1.0.0",
+    "langchain-qdrant>=0.2.1",
     "langchain-text-splitters>=1.0.0",
     "langdetect>=1.0.9",
     "langgraph>=0.2.76",
@@ -175,6 +178,7 @@ dependencies = [
     "python-magic>=0.4.27",
     "python-multipart>=0.0.20",
     "python-oxmsg>=0.0.2",
+    "qdrant-client>=1.14.3",
     "pyyaml>=6.0.2",
     "rapidfuzz>=3.13.0",
     "referencing>=0.36.2",
@@ -224,7 +228,6 @@ requirements-txt = [
     "langchain-cohere",
     "langchain-dashscope",
     "langchain-fireworks",
-    "langchain-gigachat",
     "langchain-google-genai",
     "langchain-google-vertexai",
     "langchain-groq",
