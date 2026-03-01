@@ -25,6 +25,7 @@ interface ResearchContentProps {
   onShareClick?: () => void;
   reset?: () => void;
   isProcessingChat?: boolean;
+  isAwaitingClarification?: boolean;
   bottomRef?: React.RefObject<HTMLDivElement>;
 }
 
@@ -48,6 +49,7 @@ export default function ResearchContent({
   onShareClick,
   reset,
   isProcessingChat = false,
+  isAwaitingClarification = false,
   bottomRef
 }: ResearchContentProps) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,7 @@ export default function ResearchContent({
             currentResearchId={currentResearchId}
             isProcessingChat={isProcessingChat}
             onShareClick={onShareClick}
+            isAwaitingClarification={isAwaitingClarification}
           />
         </div>
 
@@ -97,19 +100,19 @@ export default function ResearchContent({
         ) : (
           <div>
             {isInChatMode && !isStopped ? (
-              <ChatInput
-                promptValue={chatPromptValue}
-                setPromptValue={setChatPromptValue}
-                handleSubmit={handleChat}
-                disabled={loading || isProcessingChat}
-              />
+                <ChatInput
+                  promptValue={chatPromptValue}
+                  setPromptValue={setChatPromptValue}
+                  handleSubmit={handleChat}
+                  disabled={loading || isProcessingChat || isAwaitingClarification}
+                />
             ) : (
               showResult && reset ? (
                 <InputArea
                   promptValue={promptValue}
                   setPromptValue={setPromptValue}
                   handleSubmit={handleDisplayResult}
-                  disabled={loading}
+                  disabled={loading || isAwaitingClarification}
                   reset={reset}
                   isStopped={isStopped}
                 />

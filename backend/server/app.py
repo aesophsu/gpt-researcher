@@ -26,9 +26,40 @@ from .routers import (
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
+_LOGGING_CONFIGURED = False
+
+
+def configure_logging_once() -> None:
+    """Configure backend logging in an idempotent way."""
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
+    log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_name, logging.INFO)
+    root_logger = logging.getLogger()
+
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+    else:
+        root_logger.setLevel(log_level)
+
+    logging.getLogger("uvicorn.supervisors.ChangeReload").setLevel(logging.WARNING)
+
+    research_logger = logging.getLogger("research")
+    if research_logger.level == logging.NOTSET:
+        research_logger.setLevel(log_level)
+
+    _LOGGING_CONFIGURED = True
+
+
+configure_logging_once()
+
 logger = logging.getLogger(__name__)
 logger.propagate = True
-logging.getLogger("uvicorn.supervisors.ChangeReload").setLevel(logging.WARNING)
 
 DOC_PATH = os.getenv("DOC_PATH", "./my-docs")
 REPORT_STORE_PATH = Path(os.getenv("REPORT_STORE_PATH", os.path.join("data", "reports.json")))

@@ -26,32 +26,24 @@ export const useResearchHistory = () => {
           setHistory(localHistory);
         }
         
-        // Then try to fetch from server, but only for items we have locally
-        if (localHistory && localHistory.length > 0) {
-          // Extract IDs from local history to filter server results
-          const localIds = localHistory.map((item: ResearchHistoryItem) => item.id).join(',');
-          console.log(`Sending ${localHistory.length} local IDs to server for filtering`);
+        // Always fetch full server history so history works even when localStorage is empty
+        const response = await fetch('/api/reports');
+        if (response.ok) {
+          const data = await response.json();
           
-          const response = await fetch(`/api/reports?report_ids=${localIds}`);
-          if (response.ok) {
-            const data = await response.json();
+          // Check if the response has the expected structure
+          if (data.reports && Array.isArray(data.reports)) {
+            console.log('Loaded research history from server:', data.reports.length, 'items');
             
-            // Check if the response has the expected structure
-            if (data.reports && Array.isArray(data.reports)) {
-              console.log('Loaded research history from server:', data.reports.length, 'items');
-              
-              // Merge local and server history
-              await syncLocalHistoryWithServer(localHistory, data.reports);
-            } else {
-              console.warn('Server response did not contain reports array', data);
-              // Keep using the local history we already loaded
-            }
+            // Merge local and server history
+            await syncLocalHistoryWithServer(localHistory || [], data.reports);
           } else {
-            console.warn('Failed to load history from server, status:', response.status);
-            // We're already using local history from above
+            console.warn('Server response did not contain reports array', data);
+            // Keep using the local history we already loaded
           }
         } else {
-          console.log('No local history found, skipping server fetch');
+          console.warn('Failed to load history from server, status:', response.status);
+          // We're already using local history from above
         }
       } catch (error) {
         console.error('Error fetching research history:', error);
@@ -152,6 +144,38 @@ export const useResearchHistory = () => {
     
     fetchHistory();
   }, []); // Empty dependency array - only run once on mount
+
+  // Force refresh history from server and merge with local cache
+  const refreshHistory = async () => {
+    try {
+      const localHistoryStr = localStorage.getItem('researchHistory');
+      const localHistory = localHistoryStr ? JSON.parse(localHistoryStr) : [];
+      const safeLocalHistory = Array.isArray(localHistory) ? localHistory : [];
+
+      const response = await fetch('/api/reports');
+      if (!response.ok) {
+        console.warn('Failed to refresh history from server, status:', response.status);
+        return false;
+      }
+
+      const data = await response.json();
+      if (!data.reports || !Array.isArray(data.reports)) {
+        console.warn('Server response did not contain reports array', data);
+        return false;
+      }
+
+      const serverIds = new Set(data.reports.map((item: ResearchHistoryItem) => item.id));
+      const localOnlyReports = safeLocalHistory.filter((item: ResearchHistoryItem) => !serverIds.has(item.id));
+      const mergedHistory = [...data.reports, ...localOnlyReports].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      setHistory(mergedHistory);
+      localStorage.setItem('researchHistory', JSON.stringify(mergedHistory));
+      return true;
+    } catch (error) {
+      console.error('Error refreshing research history:', error);
+      return false;
+    }
+  };
   
   // Save new research
   const saveResearch = async (question: string, answer: string, orderedData: Data[]) => {
@@ -492,6 +516,7 @@ export const useResearchHistory = () => {
   return {
     history,
     loading,
+    refreshHistory,
     saveResearch,
     updateResearch,
     getResearchById,

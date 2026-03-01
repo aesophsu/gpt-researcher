@@ -18,6 +18,7 @@ interface MobileChatPanelProps {
   orderedData: Data[];
   loading: boolean;
   isProcessingChat: boolean;
+  clarificationPending?: boolean;
   isStopped: boolean;
   onNewResearch?: () => void;
   className?: string;
@@ -195,6 +196,7 @@ const MobileChatPanel: React.FC<MobileChatPanelProps> = ({
   orderedData,
   loading,
   isProcessingChat,
+  clarificationPending = false,
   isStopped,
   onNewResearch,
   className
@@ -290,7 +292,7 @@ const MobileChatPanel: React.FC<MobileChatPanelProps> = ({
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
-    if (!chatPromptValue.trim() || isProcessingChat || isSubmitting || isStopped) {
+    if (!chatPromptValue.trim() || isProcessingChat || isSubmitting || isStopped || clarificationPending) {
       return;
     }
     
@@ -311,7 +313,7 @@ const MobileChatPanel: React.FC<MobileChatPanelProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [chatPromptValue, isProcessingChat, isSubmitting, isStopped, setChatPromptValue, handleChat]);
+  }, [chatPromptValue, isProcessingChat, isSubmitting, isStopped, clarificationPending, setChatPromptValue, handleChat]);
   
   // Handle keyboard shortcuts - memoized
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -469,14 +471,14 @@ const MobileChatPanel: React.FC<MobileChatPanelProps> = ({
               placeholder="Ask a research question..."
               className="w-full px-4 py-3 pr-14 bg-gray-800/90 border border-gray-700 focus:border-teal-500 rounded-xl resize-none text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition-all shadow-sm"
               style={{ minHeight: '48px', maxHeight: '120px' }}
-              disabled={isProcessingChat || isSubmitting}
+              disabled={isProcessingChat || isSubmitting || clarificationPending}
             />
             
             <button
               type="submit"
-              disabled={!chatPromptValue.trim() || isProcessingChat || isSubmitting}
+              disabled={!chatPromptValue.trim() || isProcessingChat || isSubmitting || clarificationPending}
               className={`absolute right-3 bottom-[50%] translate-y-[50%] w-9 h-9 flex items-center justify-center rounded-full ${
-                chatPromptValue.trim() && !isProcessingChat && !isSubmitting
+                chatPromptValue.trim() && !isProcessingChat && !isSubmitting && !clarificationPending
                   ? 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white shadow-md'
                   : 'bg-gray-700 text-gray-400 cursor-not-allowed'
               } transition-all duration-200`}

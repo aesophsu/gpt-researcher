@@ -17,6 +17,7 @@ interface ResearchPanelProps {
   onNewResearch?: () => void;
   loading?: boolean;
   toggleSidebar?: () => void;
+  isAwaitingClarification?: boolean;
 }
 
 const ResearchPanel: React.FC<ResearchPanelProps> = ({
@@ -31,7 +32,8 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
   setIsCopilotVisible,
   onNewResearch,
   loading,
-  toggleSidebar
+  toggleSidebar,
+  isAwaitingClarification = false,
 }) => {
   // Determine if research is complete (has answer) and copilot should be highlighted
   const researchComplete = Boolean(answer && answer.length > 0);
@@ -57,7 +59,7 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              New Research
+              新建研究
             </button>
           )}
           
@@ -72,7 +74,7 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
                 <polyline points="16 6 12 2 8 6"></polyline>
                 <line x1="12" y1="2" x2="12" y2="15"></line>
               </svg>
-              Share
+              分享
             </button>
           )}
           
@@ -112,6 +114,7 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
             chatBoxSettings={chatBoxSettings}
             handleClickSuggestion={handleClickSuggestion}
             currentResearchId={currentResearchId}
+            isAwaitingClarification={isAwaitingClarification}
           />
           
           {/* Loading indicator - show during research */}

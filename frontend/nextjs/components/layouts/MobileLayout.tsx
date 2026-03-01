@@ -79,7 +79,7 @@ export default function MobileLayout({
                 height={30}
                 className="rounded-md mr-2"
               />
-              <span className="font-medium text-gray-200 text-sm">GPT Researcher</span>
+              <span className="font-medium text-gray-200 text-sm">GPT 研究助手</span>
             </a>
           </div>
           
@@ -148,7 +148,7 @@ export default function MobileLayout({
         {showHistory && (
           <div className="px-4 py-3 bg-gray-800/90 border-t border-gray-700/50 animate-slide-down shadow-lg max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="mb-3 flex justify-between items-center">
-              <h3 className="text-sm font-medium text-gray-200">Research History</h3>
+              <h3 className="text-sm font-medium text-gray-200">研究历史</h3>
               <button 
                 onClick={() => setShowHistory(false)}
                 className="text-gray-400 hover:text-gray-300"
@@ -186,12 +186,12 @@ export default function MobileLayout({
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                 </div>
-                <p className="text-sm text-gray-400">No research history yet</p>
+                <p className="text-sm text-gray-400">暂无研究历史</p>
                 <button 
                   onClick={onNewResearch} 
                   className="mt-3 px-4 py-2 text-xs text-teal-300 bg-teal-900/30 hover:bg-teal-800/40 rounded-md transition-colors"
                 >
-                  Start New Research
+                  开始新研究
                 </button>
               </div>
             )}
@@ -202,7 +202,7 @@ export default function MobileLayout({
                   href="/history" 
                   className="text-xs text-teal-400 hover:text-teal-300 transition-colors"
                 >
-                  View All Research History
+                  查看全部研究历史
                 </a>
               </div>
             )}
@@ -213,7 +213,7 @@ export default function MobileLayout({
         {showSettings && (
           <div className="px-4 py-3 bg-gray-800/90 border-t border-gray-700/50 animate-slide-down shadow-lg">
             <div className="mb-2 flex justify-between items-center">
-              <h3 className="text-sm font-medium text-gray-200">Settings</h3>
+              <h3 className="text-sm font-medium text-gray-200">设置</h3>
               <button 
                 onClick={() => setShowSettings(false)}
                 className="text-gray-400 hover:text-gray-300"
@@ -227,33 +227,33 @@ export default function MobileLayout({
             
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Report Type</label>
+                <label className="block text-xs text-gray-400 mb-1">报告类型</label>
                 <select 
                   className="w-full bg-gray-900 border border-gray-700 rounded-md py-1.5 px-2 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
                   value={chatBoxSettings.report_type}
                   onChange={(e) => setChatBoxSettings({...chatBoxSettings, report_type: e.target.value})}
                 >
-                  <option value="research_report">Summary - Short and fast (~2 min)</option>
-                  <option value="deep">Deep Research Report</option>
-                  <option value="multi_agents">Multi Agents Report</option>
-                  <option value="detailed_report">Detailed - In depth and longer (~5 min)</option>
+                  <option value="research_report">摘要报告 - 简短快速（约2分钟）</option>
+                  <option value="deep">深度研究报告</option>
+                  <option value="multi_agents">多智能体报告</option>
+                  <option value="detailed_report">详细报告 - 更深入更完整（约5分钟）</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Research Source</label>
+                <label className="block text-xs text-gray-400 mb-1">研究来源</label>
                 <select 
                   className="w-full bg-gray-900 border border-gray-700 rounded-md py-1.5 px-2 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
                   value={chatBoxSettings.report_source}
                   onChange={(e) => setChatBoxSettings({...chatBoxSettings, report_source: e.target.value})}
                 >
-                  <option value="web">Web</option>
-                  <option value="scholar">Scholar</option>
+                  <option value="web">互联网</option>
+                  <option value="scholar">学术</option>
                 </select>
               </div>
 
               <div className="flex items-center justify-between bg-gray-900 border border-gray-700 rounded-md py-2 px-3">
-                <label className="text-xs text-gray-300">Medical Mode (Qdrant local-first)</label>
+                <label className="text-xs text-gray-300">医学模式（Qdrant 本地优先）</label>
                 <input
                   type="checkbox"
                   checked={chatBoxSettings.medical_mode || false}
@@ -267,7 +267,7 @@ export default function MobileLayout({
               </div>
               
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Research Tone</label>
+                <label className="block text-xs text-gray-400 mb-1">写作语气</label>
                 <select 
                   className="w-full bg-gray-900 border border-gray-700 rounded-md py-1.5 px-2 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
                   value={chatBoxSettings.tone}

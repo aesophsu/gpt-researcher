@@ -599,8 +599,8 @@ and research data:
         report_format: str = "apa",
         max_subsections=5,
         total_words=800,
-        tone: Tone = Tone.Objective,
-        language: str = "english",
+        tone: Tone = Tone.Formal,
+        language: str = "chinese",
     ) -> str:
         return f"""
 Context:

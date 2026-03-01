@@ -4,7 +4,7 @@ MAIN_BRANCH ?= main
 UPSTREAM_NAME ?= upstream
 UPSTREAM_URL ?= https://github.com/assafelovic/gpt-researcher.git
 
-.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify nix-shell bootstrap backend-dev frontend-dev dev local-health zotero-import zotero-reindex zotero-import-fast
+.PHONY: help upstream-init sync sync-rebase deps deps-upgrade nix-update update-all safety-branch verify nix-shell bootstrap backend-dev frontend-dev dev local-health zotero-import zotero-reindex zotero-import-fast p0-guardrails
 
 help:
 	@echo "Available targets:"
@@ -23,6 +23,7 @@ help:
 	@echo "  make zotero-import   # Import Zotero PDFs -> Ollama embeddings -> Qdrant"
 	@echo "  make zotero-reindex  # Rebuild fixed Zotero Qdrant collection from scratch"
 	@echo "  make zotero-import-fast # Import with larger batch size (BATCH_SIZE=128)"
+	@echo "  make p0-guardrails   # Run P0 static guardrails checks"
 	@echo "  make safety-branch   # Create chore/sync-YYYYMMDD branch"
 	@echo "  make verify          # Verify remotes and recent commits"
 	@echo "  make update-all      # sync + nix-update + deps"
@@ -117,6 +118,9 @@ zotero-reindex:
 zotero-import-fast:
 	@env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u http_proxy -u HTTPS_PROXY -u https_proxy \
 		BATCH_SIZE=128 bash scripts/import_zotero_local.sh
+
+p0-guardrails:
+	@python scripts/check_p0_guardrails.py
 
 verify:
 	@git remote -v

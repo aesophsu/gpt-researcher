@@ -31,7 +31,7 @@ class DeepResearch:
         breadth: int = 4,
         depth: int = 2,
         websocket: Optional[WebSocket] = None,
-        tone: Tone = Tone.Objective,
+        tone: Tone = Tone.Formal,
         config_path: Optional[str] = None,
         headers: Optional[Dict] = None,
         concurrency_limit: int = 2  # Match TypeScript version

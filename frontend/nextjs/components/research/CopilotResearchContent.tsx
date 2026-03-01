@@ -21,6 +21,7 @@ interface CopilotResearchContentProps {
   onShareClick?: () => void;
   reset?: () => void;
   isProcessingChat?: boolean;
+  isAwaitingClarification?: boolean;
   onNewResearch?: () => void;
   toggleSidebar?: () => void;
 }
@@ -43,6 +44,7 @@ export default function CopilotResearchContent({
   onShareClick,
   reset,
   isProcessingChat = false,
+  isAwaitingClarification = false,
   onNewResearch,
   toggleSidebar
 }: CopilotResearchContentProps) {
@@ -219,6 +221,7 @@ export default function CopilotResearchContent({
           onNewResearch={onNewResearch}
           loading={loading}
           toggleSidebar={toggleSidebar}
+          isAwaitingClarification={isAwaitingClarification}
         />
       </div>
 
@@ -253,6 +256,7 @@ export default function CopilotResearchContent({
             loading={loading}
             isProcessingChat={isProcessingChat}
             isStopped={isStopped}
+            isAwaitingClarification={isAwaitingClarification}
             bottomRef={bottomRef}
             isCopilotVisible={isCopilotVisible}
             setIsCopilotVisible={toggleCopilotVisibility}

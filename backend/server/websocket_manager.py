@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import traceback
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from fastapi import WebSocket
 
@@ -134,8 +134,55 @@ def _medical_local_topk() -> int:
     return max(3, min(20, value))
 
 
-async def run_agent(task, report_type, report_source, source_urls, document_urls, tone: Tone, websocket, stream_output=stream_output, headers=None, query_domains=None, config_path="", return_researcher=False, mcp_enabled=False, mcp_strategy="fast", mcp_configs=None, medical_mode=False, medical_collection=None):
-    """Run the agent."""    
+async def run_agent(
+    task: str,
+    report_type: str,
+    report_source: str,
+    source_urls: list[str] | None,
+    document_urls: list[str] | None,
+    tone: Tone,
+    websocket,
+    stream_output=stream_output,
+    headers=None,
+    query_domains: list[str] | None = None,
+    config_path: str = "",
+    return_researcher: bool = False,
+    mcp_enabled: bool = False,
+    mcp_strategy: str = "fast",
+    mcp_configs: list[dict[str, Any]] | None = None,
+    medical_mode: bool = False,
+    medical_collection=None,
+):
+    """Run a research agent and return report text (or report + researcher).
+
+    Args:
+        task: User task prompt to research.
+        report_type: Selected report mode.
+        report_source: Report source type.
+        source_urls: Optional source URLs for grounding.
+        document_urls: Optional document URLs for grounding.
+        tone: Report tone enum.
+        websocket: Optional websocket used for streaming logs.
+        stream_output: Stream callback passed to multi-agent flow.
+        headers: Optional request headers for upstream providers.
+        query_domains: Optional domain allowlist for search.
+        config_path: Configuration profile path.
+        return_researcher: If True, return `(report, researcher)`.
+        mcp_enabled: Enables MCP for this request.
+        mcp_strategy: MCP strategy ("fast", "deep", "disabled").
+        mcp_configs: Optional MCP server configuration list.
+        medical_mode: Whether to run staged medical retrieval mode.
+        medical_collection: Optional medical collection override.
+
+    Returns:
+        `str` report, or `(str, researcher)` when `return_researcher` is True.
+
+    Notes:
+        This function does not mutate process-wide environment variables.
+        MCP/retriever behavior is resolved by GPTResearcher configuration.
+    """
+    source_urls = source_urls or []
+    document_urls = document_urls or []
     query_domains = query_domains or []
     mcp_configs = mcp_configs or []
 
@@ -144,7 +191,11 @@ async def run_agent(task, report_type, report_source, source_urls, document_urls
 
     # Set up MCP configuration if enabled
     if mcp_enabled and mcp_configs:
-        print(f"🔧 MCP enabled with strategy '{mcp_strategy}' and {len(mcp_configs)} server(s)")
+        logger.info(
+            "MCP enabled with strategy '%s' and %d server(s)",
+            mcp_strategy,
+            len(mcp_configs),
+        )
         await logs_handler.send_json({
             "type": "logs",
             "content": "mcp_init",

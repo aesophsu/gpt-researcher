@@ -6,6 +6,7 @@ import time
 import shutil
 import traceback
 from typing import Awaitable, Dict, List, Any
+import uuid
 from fastapi.responses import JSONResponse, FileResponse
 from gpt_researcher.document.document import DocumentLoader
 from gpt_researcher import GPTResearcher
@@ -15,6 +16,7 @@ from datetime import datetime
 from fastapi import HTTPException
 import logging
 import hashlib
+from .clarification_gate import clarification_gate_manager
 
 # Import chat agent
 try:
@@ -33,6 +35,7 @@ class CustomLogsHandler:
     def __init__(self, websocket, task: str):
         self.logs = []
         self.websocket = websocket
+        self.session_id = str(id(websocket)) if websocket is not None else f"local-{uuid.uuid4().hex}"
         sanitized_filename = sanitize_filename(f"task_{int(time.time())}_{task}")
         self.log_file = os.path.join("outputs", f"{sanitized_filename}.json")
         self.timestamp = datetime.now().isoformat()
@@ -75,6 +78,51 @@ class CustomLogsHandler:
         # Save updated log file
         with open(self.log_file, 'w') as f:
             json.dump(log_data, f, indent=2)
+
+    async def await_clarification_request(
+        self,
+        query: str,
+        generated_subqueries: list[str],
+        clarification_questions: list[str],
+        defaults: dict[str, str | None] | None = None,
+        timeout_seconds: int = 300,
+    ) -> dict[str, Any]:
+        """Send clarification request and block until user response arrives."""
+        if not self.websocket:
+            raise RuntimeError("Clarification gate requires an active websocket session.")
+
+        request_id = uuid.uuid4().hex
+        future = await clarification_gate_manager.register(self.session_id, request_id)
+
+        await self.send_json({
+            "type": "clarification_request",
+            "request_id": request_id,
+            "stage": "subqueries",
+            "query": query,
+            "generated_subqueries": generated_subqueries,
+            "clarification_questions": clarification_questions,
+            "defaults": defaults or {
+                "scope": None,
+                "time_window": None,
+                "language": None,
+                "output_preference": None,
+            },
+        })
+
+        try:
+            response = await asyncio.wait_for(future, timeout=timeout_seconds)
+            if not isinstance(response, dict):
+                raise ValueError("Invalid clarification response payload.")
+            return response
+        except asyncio.TimeoutError as exc:
+            await self.send_json({
+                "type": "error",
+                "content": "clarification_timeout",
+                "output": "Clarification timed out after 5 minutes. Research was cancelled.",
+            })
+            raise TimeoutError("Clarification timed out after 5 minutes.") from exc
+        finally:
+            await clarification_gate_manager.unregister(self.session_id, request_id)
 
 
 class Researcher:
@@ -178,10 +226,51 @@ async def handle_start_command(websocket, data: str, manager):
     await send_file_paths(websocket, file_paths)
 
 
-async def handle_human_feedback(data: str):
-    feedback_data = json.loads(data[14:])  # Remove "human_feedback" prefix
-    print(f"Received human feedback: {feedback_data}")
-    # TODO: Add logic to forward the feedback to the appropriate agent or update the research state
+async def handle_human_feedback(websocket, data: str):
+    """Backward-compatible alias for clarification responses."""
+    await handle_clarification_response(websocket, data[14:].strip(), is_raw_payload=True)
+
+
+async def handle_clarification_response(websocket, data: str, is_raw_payload: bool = False):
+    """Resolve a pending clarification request for the current websocket session."""
+    if is_raw_payload:
+        payload_str = data
+    else:
+        parts = data.split(" ", 1)
+        payload_str = parts[1].strip() if len(parts) > 1 else ""
+    if not payload_str:
+        await websocket.send_json({
+            "type": "error",
+            "content": "clarification_error",
+            "output": "Empty clarification response payload.",
+        })
+        return
+    response_data = json.loads(payload_str)
+
+    session_id = str(id(websocket))
+    request_id = response_data.get("request_id")
+    if not request_id:
+        await websocket.send_json({
+            "type": "error",
+            "content": "clarification_error",
+            "output": "Missing request_id in clarification response.",
+        })
+        return
+
+    resolved = await clarification_gate_manager.resolve(session_id, request_id, response_data)
+    if not resolved:
+        await websocket.send_json({
+            "type": "error",
+            "content": "clarification_error",
+            "output": "No pending clarification request matched this request_id.",
+        })
+        return
+
+    await websocket.send_json({
+        "type": "logs",
+        "content": "clarification_received",
+        "output": "Clarification received. Resuming research...",
+    })
 
 
 async def handle_chat_command(websocket, data: str):
@@ -358,7 +447,10 @@ async def handle_websocket_communication(websocket, manager):
                 
                 if data == "ping":
                     await websocket.send_text("pong")
-                elif running_task and not running_task.done():
+                elif running_task and not running_task.done() and not (
+                    data.strip().startswith("clarification_response")
+                    or data.strip().startswith("human_feedback")
+                ):
                     # discard any new request if a task is already running
                     logger.warning(
                         f"Received request while task is already running. Request data preview: {data[: min(20, len(data))]}..."
@@ -376,9 +468,12 @@ async def handle_websocket_communication(websocket, manager):
                     running_task = run_long_running_task(
                         handle_start_command(websocket, data, manager)
                     )
+                elif data.strip().startswith("clarification_response"):
+                    logger.info("Processing clarification_response command")
+                    await handle_clarification_response(websocket, data)
                 elif data.strip().startswith("human_feedback"):
                     logger.info(f"Processing human_feedback command")
-                    running_task = run_long_running_task(handle_human_feedback(data))
+                    await handle_human_feedback(websocket, data)
                 elif data.strip().startswith("chat"):
                     logger.info(f"Processing chat command")
                     running_task = run_long_running_task(handle_chat_command(websocket, data))
@@ -398,6 +493,7 @@ async def handle_websocket_communication(websocket, manager):
     finally:
         if running_task and not running_task.done():
             running_task.cancel()
+        await clarification_gate_manager.cleanup_session(str(id(websocket)))
 
 def extract_command_data(json_data: Dict) -> tuple:
     return (

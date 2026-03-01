@@ -29,7 +29,46 @@ export interface ChatData extends BaseData {
   metadata?: any; // For storing search results and other contextual information
 }
 
-export type Data = BasicData | LanggraphButtonData | DifferencesData | QuestionData | ChatData;
+export interface ClarificationRequestData extends BaseData {
+  type: 'clarification_request';
+  request_id: string;
+  stage: 'subqueries';
+  query?: string;
+  generated_subqueries: string[];
+  clarification_questions: string[];
+  defaults?: ClarificationConstraints;
+}
+
+export interface ClarificationConstraints {
+  scope: string | null;
+  time_window: string | null;
+  language: string | null;
+  output_preference: string | null;
+}
+
+export interface ClarificationRequestPayload {
+  request_id: string;
+  stage: 'subqueries';
+  query?: string;
+  generated_subqueries: string[];
+  clarification_questions: string[];
+  defaults?: ClarificationConstraints;
+}
+
+export interface ClarificationResponsePayload {
+  request_id: string;
+  approved_subqueries: string[];
+  constraints: ClarificationConstraints;
+  notes: string | null;
+}
+
+export type Data =
+  | BasicData
+  | LanggraphButtonData
+  | DifferencesData
+  | QuestionData
+  | ChatData
+  | ClarificationRequestData;
 
 export interface MCPConfig {
   name: string;

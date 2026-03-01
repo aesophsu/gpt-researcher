@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     description,
     url: url,
     siteName: sitename,
-    locale: "en_US",
+    locale: "zh_CN",
     type: "website",
   },
   twitter: {
@@ -60,7 +60,7 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html className="gptr-root" lang="en" suppressHydrationWarning>
+    <html className="gptr-root" lang="zh-CN" suppressHydrationWarning>
       <head>
         <PlausibleProvider domain="localhost:3000" />
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />

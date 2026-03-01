@@ -13,6 +13,7 @@ interface MobileResearchContentProps {
   setChatPromptValue: React.Dispatch<React.SetStateAction<string>>;
   handleChat: (message: string) => void;
   isProcessingChat?: boolean;
+  clarificationPending?: boolean;
   onNewResearch?: () => void;
   currentResearchId?: string;
   onShareClick?: () => void;
@@ -27,6 +28,7 @@ export default function MobileResearchContent({
   setChatPromptValue,
   handleChat: parentHandleChat, // Renamed to clarify it's the parent's handler
   isProcessingChat: parentIsProcessing = false,
+  clarificationPending = false,
   onNewResearch,
   currentResearchId,
   onShareClick
@@ -61,7 +63,7 @@ export default function MobileResearchContent({
   // Handle chat message submission directly within the component
   const handleLocalChat = async (message: string) => {
     // Prevent processing if already in progress
-    if (localProcessing) {
+    if (localProcessing || clarificationPending) {
       return;
     }
     
@@ -99,8 +101,8 @@ export default function MobileResearchContent({
         'hybrid';
         
       const tone = window.localStorage.getItem('chatBoxSettings') ?
-        JSON.parse(window.localStorage.getItem('chatBoxSettings') || '{}').tone || 'Objective' :
-        'Objective';
+        JSON.parse(window.localStorage.getItem('chatBoxSettings') || '{}').tone || 'Formal' :
+        'Formal';
       
       // Get all existing chat messages for context if we have a research ID
       const existingMessages = currentResearchId ? 
@@ -219,7 +221,7 @@ export default function MobileResearchContent({
               <>
                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse mr-2"></div>
                 <span className="text-xs text-gray-300">
-                  {localLoading ? "Researching..." : "Processing..."}
+                  {clarificationPending ? "Waiting for clarification..." : localLoading ? "Researching..." : "Processing..."}
                 </span>
               </>
             )}
@@ -258,6 +260,7 @@ export default function MobileResearchContent({
           orderedData={localOrderedData}
           loading={localLoading}
           isProcessingChat={localProcessing}
+          clarificationPending={clarificationPending}
           isStopped={isStopped}
           onNewResearch={onNewResearch}
         />

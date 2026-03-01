@@ -37,14 +37,14 @@ export default function Report({ answer, researchId }: { answer: string, researc
               >
                 <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <h3 className="text-sm font-medium text-teal-200">Research Report</h3>
+              <h3 className="text-sm font-medium text-teal-200">研究报告</h3>
             </div>
             {answer && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(answer.trim());
-                    toast("Report copied to clipboard", {
+                    toast("报告已复制到剪贴板", {
                       icon: "✂️",
                     });
                   }}

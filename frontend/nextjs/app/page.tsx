@@ -7,7 +7,15 @@ import { useResearchHistoryContext } from '@/hooks/ResearchHistoryContext';
 import { useScrollHandler } from '@/hooks/useScrollHandler';
 import { startLanggraphResearch } from '../components/Langgraph/Langgraph';
 import findDifferences from '../helpers/findDifferences';
-import { Data, ChatBoxSettings, QuestionData, ChatMessage, ChatData } from '../types/data';
+import {
+  Data,
+  ChatBoxSettings,
+  QuestionData,
+  ChatMessage,
+  ChatData,
+  ClarificationRequestPayload,
+  ClarificationResponsePayload,
+} from '../types/data';
 import { preprocessOrderedData } from '../utils/dataProcessing';
 import { toast } from "react-hot-toast";
 import { v4 as uuidv4 } from 'uuid';
@@ -38,7 +46,7 @@ export default function Home() {
     const defaultSettings = {
       report_type: "research_report",
       report_source: "hybrid",
-      tone: "Objective",
+      tone: "Formal",
       domains: [],
       defaultReportType: "research_report",
       layoutType: 'copilot',
@@ -69,6 +77,8 @@ export default function Home() {
   const [orderedData, setOrderedData] = useState<Data[]>([]);
   const [showHumanFeedback, setShowHumanFeedback] = useState(false);
   const [questionForHuman, setQuestionForHuman] = useState<true | false>(false);
+  const [clarificationRequest, setClarificationRequest] = useState<ClarificationRequestPayload | null>(null);
+  const [isAwaitingClarification, setIsAwaitingClarification] = useState(false);
   const [allLogs, setAllLogs] = useState<any[]>([]);
   const [isStopped, setIsStopped] = useState(false);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -98,6 +108,7 @@ export default function Home() {
 
   const { 
     history, 
+    refreshHistory,
     saveResearch, 
     updateResearch,
     getResearchById, 
@@ -112,11 +123,13 @@ export default function Home() {
     setAnswer,
     setLoading,
     setShowHumanFeedback,
-    setQuestionForHuman
+    setQuestionForHuman,
+    setClarificationRequest,
+    setIsAwaitingClarification
   ));
   
   // Use the reference to access websocket functions
-  const { socket, initializeWebSocket } = websocketRef.current;
+  const { socket, initializeWebSocket, sendClarificationResponse } = websocketRef.current;
 
   const handleFeedbackSubmit = (feedback: string | null) => {
     if (socket) {
@@ -125,7 +138,22 @@ export default function Home() {
     setShowHumanFeedback(false);
   };
 
+  const handleClarificationSubmit = (payload: ClarificationResponsePayload) => {
+    const sent = sendClarificationResponse(payload);
+    if (!sent) {
+      toast.error('Unable to submit clarification. WebSocket is disconnected.');
+      return;
+    }
+    setIsAwaitingClarification(false);
+    setClarificationRequest(null);
+    setShowHumanFeedback(false);
+  };
+
   const handleChat = async (message: string) => {
+    if (isAwaitingClarification) {
+      toast('Please submit clarification before sending new prompts.');
+      return;
+    }
     if (!currentResearchId && !answer) {
       // On mobile, if there's no research yet, treat this as a new research request
       if (isMobile) {
@@ -323,6 +351,10 @@ export default function Home() {
   };
 
   const handleDisplayResult = async (newQuestion: string) => {
+    if (isAwaitingClarification) {
+      toast('Please submit clarification for the current run first.');
+      return;
+    }
     // Exit chat mode when starting a new research
     setIsInChatMode(false);
     setShowResult(true);
@@ -331,17 +363,16 @@ export default function Home() {
     setPromptValue("");
     setAnswer("");
     setCurrentResearchId(null); // Reset current research ID for new research
+    setClarificationRequest(null);
+    setIsAwaitingClarification(false);
     setOrderedData((prevOrder) => [...prevOrder, { type: 'question', content: newQuestion }]);
 
     // For mobile, use a simplified approach without websockets
     if (isMobile) {
       try {
-        // Create a new unique ID for this research
-        const newResearchId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        
         // First save the initial question to history - with proper parameters
         const initialOrderedData: Data[] = [{ type: 'question', content: newQuestion } as QuestionData];
-        await saveResearch(
+        const savedResearchId = await saveResearch(
           newQuestion,  // question
           '',           // empty answer initially
           initialOrderedData  // ordered data
@@ -386,13 +417,14 @@ export default function Home() {
           
           // Save the completed research with proper parameters
           await updateResearch(
-            newResearchId,    // id
+            savedResearchId,  // id
             chatAnswer,       // answer
             updatedOrderedData // ordered data
           );
+          await refreshHistory();
           
           // Set current research ID so we can continue the conversation
-          setCurrentResearchId(newResearchId);
+          setCurrentResearchId(savedResearchId);
         } else {
           // Handle error
           setOrderedData(prevOrder => [...prevOrder, { 
@@ -448,6 +480,10 @@ export default function Home() {
 
   // Mobile-specific implementation for research
   const handleMobileDisplayResult = async (newQuestion: string) => {
+    if (isAwaitingClarification) {
+      toast('Please submit clarification for the current run first.');
+      return;
+    }
     // Update UI state
     setIsInChatMode(false);
     setShowResult(true);
@@ -461,14 +497,11 @@ export default function Home() {
     setOrderedData([{ type: 'question', content: newQuestion } as QuestionData]);
     
     try {
-      // Generate unique ID for this research
-      const mobileResearchId = `mobile-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      
       // Save initial research with just the question
       const initialOrderedData: Data[] = [{ type: 'question', content: newQuestion } as QuestionData];
       
       // Save to research history
-      await saveResearch(
+      const savedResearchId = await saveResearch(
         newQuestion,  // question
         '',           // empty answer initially
         initialOrderedData  // ordered data
@@ -485,7 +518,7 @@ export default function Home() {
           // Include the required parameters
           report: '',  // No report since this is a new research
           report_source: chatBoxSettings.report_source || 'hybrid',
-          tone: chatBoxSettings.tone || 'Objective'
+          tone: chatBoxSettings.tone || 'Formal'
         }),
         // Set reasonable timeout
         signal: AbortSignal.timeout(30000) // 30-second timeout
@@ -522,13 +555,14 @@ export default function Home() {
         
         // Update research history with the answer
         await updateResearch(
-          mobileResearchId,
+          savedResearchId,
           responseContent,
           updatedOrderedData
         );
+        await refreshHistory();
         
         // Set current research ID for future interactions
-        setCurrentResearchId(mobileResearchId);
+        setCurrentResearchId(savedResearchId);
       } else {
         // Handle error in response
         setOrderedData(prevData => [
@@ -558,6 +592,10 @@ export default function Home() {
 
   // Mobile-specific chat handler
   const handleMobileChat = async (message: string) => {
+    if (isAwaitingClarification) {
+      toast('Please submit clarification before sending new prompts.');
+      return;
+    }
     // Set states for UI feedback
     setIsProcessingChat(true);
     
@@ -586,7 +624,7 @@ export default function Home() {
           messages: [userMessage],
           report: answer || '',
           report_source: chatBoxSettings.report_source || 'hybrid',
-          tone: chatBoxSettings.tone || 'Objective'
+          tone: chatBoxSettings.tone || 'Formal'
         }),
         // Set reasonable timeout
         signal: AbortSignal.timeout(20000) // 20-second timeout
@@ -672,6 +710,8 @@ export default function Home() {
     // Reset feedback states
     setShowHumanFeedback(false);
     setQuestionForHuman(false);
+    setClarificationRequest(null);
+    setIsAwaitingClarification(false);
     
     // Clean up connections
     if (socket) {
@@ -742,13 +782,14 @@ export default function Home() {
       if (isUpdatingRef.current) return;
       
       if (showResult && !loading && answer && question && orderedData.length > 0) {
-        if (isInChatMode && currentResearchId) {
+        if (currentResearchId) {
           // Prevent redundant updates by checking if data has changed
           try {
             const currentResearch = await getResearchById(currentResearchId);
             if (currentResearch && (currentResearch.answer !== answer || JSON.stringify(currentResearch.orderedData) !== JSON.stringify(orderedData))) {
               isUpdatingRef.current = true;
               await updateResearch(currentResearchId, answer, orderedData);
+              await refreshHistory();
               // Reset the flag after a short delay to allow state updates to complete
               setTimeout(() => {
                 isUpdatingRef.current = false;
@@ -758,7 +799,7 @@ export default function Home() {
             console.error('Error updating research:', error);
             isUpdatingRef.current = false;
           }
-        } else if (!isInChatMode) {
+        } else {
           // Check if this is a new research (not loaded from history)
           const isNewResearch = !history.some(item => 
             item.question === question && item.answer === answer
@@ -768,6 +809,7 @@ export default function Home() {
             isUpdatingRef.current = true;
             try {
               const newId = await saveResearch(question, answer, orderedData);
+              await refreshHistory();
               setCurrentResearchId(newId);
               
               // Don't navigate to the research page URL anymore
@@ -788,7 +830,7 @@ export default function Home() {
     
     // Call the async function
     saveOrUpdateResearch();
-  }, [showResult, loading, answer, question, orderedData, history, saveResearch, updateResearch, isInChatMode, currentResearchId, getResearchById]);
+  }, [showResult, loading, answer, question, orderedData, history, refreshHistory, saveResearch, updateResearch, currentResearchId, getResearchById]);
 
   // Handle selecting a research from history
   const handleSelectResearch = async (id: string) => {
@@ -884,6 +926,7 @@ export default function Home() {
           setChatPromptValue={setChatPromptValue}
           handleChat={handleMobileChat} // Use mobile-specific chat handler
           isProcessingChat={isProcessingChat}
+          clarificationPending={isAwaitingClarification}
           onNewResearch={handleStartNewResearch}
           currentResearchId={currentResearchId || undefined}
           onShareClick={currentResearchId ? handleCopyUrl : undefined}
@@ -907,7 +950,22 @@ export default function Home() {
           mainContentRef,
           toggleSidebar,
           isProcessingChat,
-          children: renderMobileContent()
+          children: (
+            <>
+              {renderMobileContent()}
+              {showHumanFeedback && (
+                <div className="px-3 pb-4">
+                  <HumanFeedback
+                    questionForHuman={questionForHuman}
+                    websocket={socket}
+                    onFeedbackSubmit={handleFeedbackSubmit}
+                    clarificationRequest={clarificationRequest}
+                    onClarificationSubmit={handleClarificationSubmit}
+                  />
+                </div>
+              )}
+            </>
+          )
         })
       ) : !showResult ? (
         // Desktop view - home page
@@ -982,6 +1040,7 @@ export default function Home() {
                   onShareClick={currentResearchId ? handleCopyUrl : undefined}
                   reset={reset}
                   isProcessingChat={isProcessingChat}
+                  isAwaitingClarification={isAwaitingClarification}
                   onNewResearch={handleStartNewResearch}
                   toggleSidebar={toggleSidebar}
                 />
@@ -1006,14 +1065,17 @@ export default function Home() {
                   onShareClick={currentResearchId ? handleCopyUrl : undefined}
                   reset={reset}
                   isProcessingChat={isProcessingChat}
+                  isAwaitingClarification={isAwaitingClarification}
                 />
               )}
               
-              {showHumanFeedback && false && (
+              {showHumanFeedback && (
                 <HumanFeedback
                   questionForHuman={questionForHuman}
                   websocket={socket}
                   onFeedbackSubmit={handleFeedbackSubmit}
+                  clarificationRequest={clarificationRequest}
+                  onClarificationSubmit={handleClarificationSubmit}
                 />
               )}
             </div>

@@ -4,7 +4,13 @@ import React from 'react';
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useWebSocket } from '../hooks/useWebSocket';
 
-import { Data, ChatBoxSettings, QuestionData } from '../types/data';
+import {
+  Data,
+  ChatBoxSettings,
+  QuestionData,
+  ClarificationRequestPayload,
+  ClarificationResponsePayload,
+} from '../types/data';
 import { preprocessOrderedData } from '../utils/dataProcessing';
 import { ResearchResults } from '../components/ResearchResults';
 
@@ -40,7 +46,7 @@ export const GPTResearcher = ({
   const [chatBoxSettings, setChatBoxSettings] = useState<ChatBoxSettings>({ 
     report_source: 'hybrid', 
     report_type: 'research_report', 
-    tone: 'Objective',
+    tone: 'Formal',
     domains: [],
     defaultReportType: 'research_report',
     layoutType: 'default',
@@ -53,6 +59,8 @@ export const GPTResearcher = ({
   const [orderedData, setOrderedData] = useState<Data[]>([]);
   const [showHumanFeedback, setShowHumanFeedback] = useState(false);
   const [questionForHuman, setQuestionForHuman] = useState<true | false>(false);
+  const [clarificationRequest, setClarificationRequest] = useState<ClarificationRequestPayload | null>(null);
+  const [isAwaitingClarification, setIsAwaitingClarification] = useState(false);
   const [allLogs, setAllLogs] = useState<any[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isStopped, setIsStopped] = useState(false);
@@ -74,12 +82,14 @@ export const GPTResearcher = ({
     }
   }, [orderedData, onResultsChange]);
 
-  const { socket, initializeWebSocket } = useWebSocket(
+  const { socket, initializeWebSocket, sendClarificationResponse } = useWebSocket(
     setOrderedData,
     setAnswer,
     setLoading,
     setShowHumanFeedback,
-    setQuestionForHuman
+    setQuestionForHuman,
+    setClarificationRequest,
+    setIsAwaitingClarification
   );
 
   const handleFeedbackSubmit = (feedback: string | null) => {
@@ -89,7 +99,20 @@ export const GPTResearcher = ({
     setShowHumanFeedback(false);
   };
 
+  const handleClarificationSubmit = (payload: ClarificationResponsePayload) => {
+    const sent = sendClarificationResponse(payload);
+    if (!sent) {
+      return;
+    }
+    setShowHumanFeedback(false);
+    setClarificationRequest(null);
+    setIsAwaitingClarification(false);
+  };
+
   const handleChat = async (message: string) => {
+    if (isAwaitingClarification) {
+      return;
+    }
     setShowResult(true);
     setQuestion(message);
     setLoading(true);
@@ -332,6 +355,8 @@ export const GPTResearcher = ({
                   questionForHuman={questionForHuman}
                   websocket={socket}
                   onFeedbackSubmit={handleFeedbackSubmit}
+                  clarificationRequest={clarificationRequest}
+                  onClarificationSubmit={handleClarificationSubmit}
                 />
               )}
 
@@ -345,7 +370,7 @@ export const GPTResearcher = ({
                   promptValue={promptValue}
                   setPromptValue={setPromptValue}
                   handleSubmit={handleChat}
-                  disabled={loading}
+                  disabled={loading || isAwaitingClarification}
                   reset={reset}
                   isStopped={isStopped}
                 />

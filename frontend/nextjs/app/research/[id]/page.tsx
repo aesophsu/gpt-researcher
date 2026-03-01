@@ -38,7 +38,7 @@ export default function ResearchPage({ params }: { params: { id: string } }) {
     const defaultSettings = {
       report_source: "hybrid",
       report_type: "research_report",
-      tone: "Objective",
+      tone: "Formal",
       domains: [],
       defaultReportType: "research_report",
       layoutType: 'copilot',

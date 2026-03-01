@@ -19,6 +19,7 @@ interface ResearchResultsProps {
   currentResearchId?: string;
   isProcessingChat?: boolean;
   onShareClick?: () => void;
+  isAwaitingClarification?: boolean;
 }
 
 export const ResearchResults: React.FC<ResearchResultsProps> = ({
@@ -29,7 +30,8 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
   handleClickSuggestion,
   currentResearchId,
   isProcessingChat = false,
-  onShareClick
+  onShareClick,
+  isAwaitingClarification = false,
 }) => {
   const groupedData = preprocessOrderedData(orderedData);
   const pathData = groupedData.find(data => data.type === 'path');
@@ -81,6 +83,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
         <SubQuestions
           metadata={subqueriesComponent.metadata}
           handleClickSuggestion={handleClickSuggestion}
+          awaitingClarification={isAwaitingClarification}
         />
       )}
       {sourceComponents}

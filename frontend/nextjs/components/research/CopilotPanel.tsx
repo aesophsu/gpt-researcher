@@ -15,6 +15,7 @@ interface CopilotPanelProps {
   loading: boolean;
   isProcessingChat: boolean;
   isStopped: boolean;
+  isAwaitingClarification?: boolean;
   bottomRef: React.RefObject<HTMLDivElement>;
   isCopilotVisible?: boolean;
   setIsCopilotVisible?: Dispatch<SetStateAction<boolean>>;
@@ -29,6 +30,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({
   loading,
   isProcessingChat,
   isStopped,
+  isAwaitingClarification = false,
   bottomRef,
   isCopilotVisible,
   setIsCopilotVisible
@@ -136,6 +138,8 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({
               <div className="text-gray-300 text-sm">
                 {loading ? (
                   <p>Working on your research... I&apos;ll analyze the results once they&apos;re complete.</p>
+                ) : isAwaitingClarification ? (
+                  <p>Waiting for clarification submission before research can continue.</p>
                 ) : (
                   <p>I&apos;ve analyzed all the research results and can answer any questions about it. How can I help?</p>
                 )}
@@ -184,7 +188,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({
             promptValue={chatPromptValue}
             setPromptValue={setChatPromptValue}
             handleSubmit={handleChat}
-            disabled={loading || isProcessingChat}
+            disabled={loading || isProcessingChat || isAwaitingClarification}
           />
         )}
         {isStopped && (

@@ -1,5 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Data, ChatBoxSettings, QuestionData } from '../types/data';
+import {
+  Data,
+  ChatBoxSettings,
+  ClarificationRequestPayload,
+  ClarificationResponsePayload,
+} from '../types/data';
 import { getHost } from '../helpers/getHost';
 
 export const useWebSocket = (
@@ -7,7 +12,9 @@ export const useWebSocket = (
   setAnswer: React.Dispatch<React.SetStateAction<string>>, 
   setLoading: React.Dispatch<React.SetStateAction<boolean>>,
   setShowHumanFeedback: React.Dispatch<React.SetStateAction<boolean>>,
-  setQuestionForHuman: React.Dispatch<React.SetStateAction<boolean | true>>
+  setQuestionForHuman: React.Dispatch<React.SetStateAction<boolean | true>>,
+  setClarificationRequest: React.Dispatch<React.SetStateAction<ClarificationRequestPayload | null>>,
+  setIsAwaitingClarification: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const heartbeatInterval = useRef<number>();
@@ -124,6 +131,17 @@ export const useWebSocket = (
           } else if (data.type === 'human_feedback' && data.content === 'request') {
             setQuestionForHuman(data.output);
             setShowHumanFeedback(true);
+          } else if (data.type === 'clarification_request') {
+            setClarificationRequest({
+              request_id: data.request_id,
+              stage: data.stage,
+              query: data.query,
+              generated_subqueries: data.generated_subqueries || [],
+              clarification_questions: data.clarification_questions || [],
+              defaults: data.defaults,
+            });
+            setIsAwaitingClarification(true);
+            setShowHumanFeedback(true);
           } else {
             const contentAndType = `${data.content}-${data.type}`;
             setOrderedData((prevOrder) => [...prevOrder, { ...data, contentAndType }]);
@@ -158,7 +176,28 @@ export const useWebSocket = (
         }
       };
     }
-  }, [socket, setOrderedData, setAnswer, setLoading, setShowHumanFeedback, setQuestionForHuman]);
+  }, [
+    socket,
+    setOrderedData,
+    setAnswer,
+    setLoading,
+    setShowHumanFeedback,
+    setQuestionForHuman,
+    setClarificationRequest,
+    setIsAwaitingClarification,
+  ]);
 
-  return { socket, setSocket, initializeWebSocket };
+  const sendClarificationResponse = useCallback((payload: ClarificationResponsePayload) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    const message = `clarification_response ${JSON.stringify(payload)}`;
+    socket.send(message);
+    setIsAwaitingClarification(false);
+    setShowHumanFeedback(false);
+    setClarificationRequest(null);
+    return true;
+  }, [socket, setClarificationRequest, setIsAwaitingClarification, setShowHumanFeedback]);
+
+  return { socket, setSocket, initializeWebSocket, sendClarificationResponse };
 };

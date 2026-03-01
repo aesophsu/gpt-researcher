@@ -404,6 +404,12 @@ class ResearchConductor:
         # Generate Sub-Queries including original query
         sub_queries = await self.plan_research(query, query_domains)
         self.logger.info(f"Generated sub-queries: {sub_queries}")
+
+        sub_queries, query_domains = await self._await_clarification_if_needed(
+            query=query,
+            sub_queries=sub_queries,
+            query_domains=query_domains,
+        )
         
         # If this is not part of a sub researcher, add original query to research for better results
         if self.researcher.report_type != "subtopic_report":
@@ -438,6 +444,126 @@ class ResearchConductor:
         except Exception as e:
             self.logger.error(f"Error during web search: {e}", exc_info=True)
             return []
+
+    def _is_clarification_gate_enabled(self) -> bool:
+        env_val = os.getenv("ENABLE_CLARIFICATION_GATE", "false").strip().lower()
+        return env_val in {"1", "true", "yes", "on"}
+
+    def _extract_domains_from_scope(self, scope: str | None) -> list[str]:
+        if not scope:
+            return []
+        parts = [part.strip() for part in re.split(r"[,\s]+", scope) if part.strip()]
+        domains: list[str] = []
+        for part in parts:
+            candidate = part
+            if "://" in candidate:
+                try:
+                    candidate = urlparse(candidate).hostname or candidate
+                except Exception:
+                    continue
+            candidate = candidate.replace("www.", "").lower()
+            if "." not in candidate:
+                continue
+            domains.append(candidate)
+        # preserve order while deduping
+        return list(dict.fromkeys(domains))
+
+    def _build_clarification_questions(self, query: str, sub_queries: list[str]) -> list[str]:
+        questions = [
+            f"For '{query}', which sub-questions should be prioritized first?",
+            "What scope boundaries should I enforce (regions, domains, or exclusions)?",
+            "What time window should I prioritize for evidence freshness?",
+            "What language should the final report use?",
+            "Any output preference (concise vs detailed, executive summary, or table-heavy)?",
+        ]
+        for sub_query in sub_queries[:5]:
+            questions.append(f"Should this sub-question stay as-is? '{sub_query}'")
+        return questions[:10]
+
+    async def _await_clarification_if_needed(
+        self,
+        query: str,
+        sub_queries: list[str],
+        query_domains: list[str],
+    ) -> tuple[list[str], list[str]]:
+        if not self._is_clarification_gate_enabled():
+            return sub_queries, query_domains
+
+        if self.researcher.report_type in {"multi_agents", "subtopic_report"}:
+            return sub_queries, query_domains
+
+        websocket = self.researcher.websocket
+        awaiter = getattr(websocket, "await_clarification_request", None)
+        if not callable(awaiter):
+            self.logger.warning("Clarification gate enabled but websocket cannot await clarification; skipping gate.")
+            return sub_queries, query_domains
+
+        clarification_questions = self._build_clarification_questions(query, sub_queries)
+        defaults = {
+            "scope": ", ".join(query_domains) if query_domains else None,
+            "time_window": None,
+            "language": None,
+            "output_preference": None,
+        }
+
+        await stream_output(
+            "logs",
+            "clarification_pending",
+            "⏸️ Waiting for clarification before continuing research...",
+            websocket,
+        )
+
+        response = await awaiter(
+            query=query,
+            generated_subqueries=sub_queries,
+            clarification_questions=clarification_questions,
+            defaults=defaults,
+            timeout_seconds=300,
+        )
+
+        approved_subqueries = response.get("approved_subqueries") or []
+        approved_subqueries = [str(item).strip() for item in approved_subqueries if str(item).strip()]
+        approved_subqueries = list(dict.fromkeys(approved_subqueries))
+        if not approved_subqueries:
+            raise ValueError("Clarification response must include at least one approved sub-query.")
+        if len(approved_subqueries) > 10:
+            raise ValueError("Clarification response exceeds maximum of 10 sub-queries.")
+
+        constraints = response.get("constraints") or {}
+        scope = constraints.get("scope")
+        time_window = constraints.get("time_window")
+        language = constraints.get("language")
+        output_preference = constraints.get("output_preference")
+
+        if time_window:
+            self.logger.warning(
+                "time_window constraint '%s' collected; retriever-level enforcement depends on provider support.",
+                time_window,
+            )
+
+        extracted_domains = self._extract_domains_from_scope(scope)
+        merged_domains = list(dict.fromkeys((query_domains or []) + extracted_domains))
+
+        # Pass constraints downstream as optional prompt/report hints.
+        self.researcher.kwargs["clarification_constraints"] = {
+            "scope": scope,
+            "time_window": time_window,
+            "language": language,
+            "output_preference": output_preference,
+            "notes": response.get("notes"),
+        }
+        if language:
+            self.researcher.kwargs["response_language"] = language
+        if output_preference:
+            self.researcher.kwargs["output_preference"] = output_preference
+
+        await stream_output(
+            "logs",
+            "clarification_applied",
+            f"✅ Clarification applied. Continuing with {len(approved_subqueries)} approved sub-queries.",
+            websocket,
+        )
+        return approved_subqueries, merged_domains
 
     def _get_mcp_strategy(self) -> str:
         """
